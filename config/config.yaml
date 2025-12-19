@@ -1,0 +1,20 @@
+# Code Review Assistant - Configuration File
+
+analysis:
+  # Patterns to exclude from analysis (glob patterns)
+  exclude_patterns:
+    - "vendor/**"
+    - "**/*_test.go"
+    - "**/testdata/**"
+    - "**/*.pb.go"        # Generated protobuf files
+    - "**/*_gen.go"       # Generated Go files
+    - "**/*.gen.go"       # Generated Go files
+
+  # Thresholds for issue detection
+  large_file_threshold: 500      # Lines - files exceeding this are flagged
+  long_function_threshold: 50    # Lines - functions exceeding this are flagged
+  min_comment_ratio: 0.15        # 15% - minimum recommended comment ratio
+
+output:
+  format: "console"               # Output format: console (json, markdown in future phases)
+  verbose: false                  # Show detailed per-file metrics
