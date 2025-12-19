@@ -11,11 +11,18 @@ import (
 
 var (
 	// Flags for analyze command
-	targetPath            string
-	excludePatterns       []string
-	largeFileThreshold    int
-	longFunctionThreshold int
-	outputFormat          string
+	targetPath              string
+	excludePatterns         []string
+	largeFileThreshold      int
+	longFunctionThreshold   int
+	complexityThreshold     int
+	outputFormat            string
+	enableCoverage          bool
+	minCoverageThreshold    float64
+	coverageTimeout         int
+	maxImports              int
+	maxExternalDependencies int
+	detectCircularDeps      bool
 )
 
 // analyzeCmd represents the analyze command
@@ -44,7 +51,14 @@ func init() {
 	analyzeCmd.Flags().StringSliceVar(&excludePatterns, "exclude", []string{}, "additional exclude patterns (can be repeated)")
 	analyzeCmd.Flags().IntVar(&largeFileThreshold, "large-file-threshold", 0, "override large file threshold (lines)")
 	analyzeCmd.Flags().IntVar(&longFunctionThreshold, "long-function-threshold", 0, "override long function threshold (lines)")
+	analyzeCmd.Flags().IntVar(&complexityThreshold, "complexity-threshold", 0, "override cyclomatic complexity threshold")
 	analyzeCmd.Flags().StringVarP(&outputFormat, "format", "f", "", "output format (console, json, markdown)")
+	analyzeCmd.Flags().BoolVar(&enableCoverage, "enable-coverage", true, "enable test coverage analysis")
+	analyzeCmd.Flags().Float64Var(&minCoverageThreshold, "min-coverage-threshold", 0, "minimum coverage threshold percentage (0-100)")
+	analyzeCmd.Flags().IntVar(&coverageTimeout, "coverage-timeout", 0, "timeout for test execution per package (seconds)")
+	analyzeCmd.Flags().IntVar(&maxImports, "max-imports", 0, "maximum imports per package before flagging")
+	analyzeCmd.Flags().IntVar(&maxExternalDependencies, "max-external-dependencies", 0, "maximum external dependencies per package")
+	analyzeCmd.Flags().BoolVar(&detectCircularDeps, "detect-circular-deps", true, "detect circular dependencies between packages")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
@@ -73,6 +87,9 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	if longFunctionThreshold > 0 {
 		overrides["long_function_threshold"] = longFunctionThreshold
 	}
+	if complexityThreshold > 0 {
+		overrides["complexity_threshold"] = complexityThreshold
+	}
 	if outputFormat != "" {
 		overrides["format"] = outputFormat
 	}
@@ -81,6 +98,24 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 	if len(excludePatterns) > 0 {
 		overrides["exclude"] = excludePatterns
+	}
+	if cmd.Flags().Changed("enable-coverage") {
+		overrides["enable_coverage"] = enableCoverage
+	}
+	if minCoverageThreshold > 0 {
+		overrides["min_coverage_threshold"] = minCoverageThreshold
+	}
+	if coverageTimeout > 0 {
+		overrides["coverage_timeout"] = coverageTimeout
+	}
+	if maxImports > 0 {
+		overrides["max_imports"] = maxImports
+	}
+	if maxExternalDependencies > 0 {
+		overrides["max_external_dependencies"] = maxExternalDependencies
+	}
+	if cmd.Flags().Changed("detect-circular-deps") {
+		overrides["detect_circular_deps"] = detectCircularDeps
 	}
 	cfg.Merge(overrides)
 

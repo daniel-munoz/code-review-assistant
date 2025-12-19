@@ -57,6 +57,24 @@ func (cr *ConsoleReporter) Report(result *analyzer.AnalysisResult) error {
 		fmt.Println()
 	}
 
+	// Most Complex Functions
+	if len(result.Metrics.MostComplexFunctions) > 0 {
+		cr.printMostComplexFunctions(result.Metrics.MostComplexFunctions)
+		fmt.Println()
+	}
+
+	// Coverage Report
+	if result.Coverage != nil {
+		cr.printCoverageReport(result.Coverage)
+		fmt.Println()
+	}
+
+	// Dependency Report
+	if result.Dependencies != nil {
+		cr.printDependencyReport(result.Dependencies)
+		fmt.Println()
+	}
+
 	// Verbose mode: per-file details
 	if cr.config.Verbose {
 		cr.printFileDetails(result.Files)
@@ -98,6 +116,8 @@ func (cr *ConsoleReporter) printAggregateMetrics(metrics *analyzer.AggregateMetr
 		{"Average Function Length", fmt.Sprintf("%.1f lines", metrics.AverageFunctionLength)},
 		{"Function Length (95th %%ile)", fmt.Sprintf("%d lines", metrics.FunctionLengthP95)},
 		{"Comment Ratio", fmt.Sprintf("%.1f%%", metrics.CommentRatio*100)},
+		{"Average Complexity", fmt.Sprintf("%.1f", metrics.AverageComplexity)},
+		{"Complexity (95th %%ile)", fmt.Sprintf("%d", metrics.ComplexityP95)},
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
@@ -138,10 +158,16 @@ func (cr *ConsoleReporter) printIssues(issues []*analyzer.Issue) {
 			fmt.Printf("  Function: %s\n", issue.Function)
 		}
 
-		if issue.Type != "low_comment_ratio" {
-			fmt.Printf("  %s: %d (threshold: %d)\n", formatIssueType(issue.Type), issue.Value, issue.Threshold)
-		} else {
+		// Handle display based on issue type
+		issueTypeStr := formatIssueType(issue.Type)
+		if issue.Type == "magic_number" {
+			// Already in message
+		} else if issue.Type == "duplicate_error_handling" {
+			fmt.Printf("  Error checks: %d (threshold: %d)\n", issue.Value, issue.Threshold)
+		} else if issue.Type == "low_comment_ratio" {
 			fmt.Printf("  Current: %d%% (recommended: >%d%%)\n", issue.Value, issue.Threshold)
+		} else if issueTypeStr != "" {
+			fmt.Printf("  %s: %d (threshold: %d)\n", issueTypeStr, issue.Value, issue.Threshold)
 		}
 
 		fmt.Println()
@@ -167,6 +193,142 @@ func (cr *ConsoleReporter) printLargestFiles(files []*analyzer.FileSize) {
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
 	table.AppendBulk(data)
 	table.Render()
+}
+
+func (cr *ConsoleReporter) printMostComplexFunctions(functions []*analyzer.FunctionInfo) {
+	fmt.Println("MOST COMPLEX FUNCTIONS")
+	fmt.Println(strings.Repeat("-", 60))
+
+	data := make([][]string, 0, len(functions))
+	for i, fn := range functions {
+		data = append(data, []string{
+			fmt.Sprintf("%d.", i+1),
+			fn.Function,
+			fmt.Sprintf("CC=%d", fn.Complexity),
+			fmt.Sprintf("%d lines", fn.Lines),
+			formatPath(fn.File),
+		})
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetBorder(false)
+	table.SetColumnSeparator("")
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.AppendBulk(data)
+	table.Render()
+}
+
+func (cr *ConsoleReporter) printCoverageReport(coverage *analyzer.CoverageReport) {
+	fmt.Println("TEST COVERAGE")
+	fmt.Println(strings.Repeat("-", 60))
+
+	// Summary
+	data := [][]string{
+		{"Average Coverage", fmt.Sprintf("%.1f%%", coverage.AverageCoverage)},
+		{"Total Packages", fmt.Sprintf("%d", len(coverage.Packages))},
+	}
+
+	if coverage.LowCoverageCount > 0 {
+		data = append(data, []string{"Packages Below Threshold", fmt.Sprintf("%d", coverage.LowCoverageCount)})
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetBorder(false)
+	table.SetColumnSeparator("")
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.AppendBulk(data)
+	table.Render()
+
+	// Verbose mode: per-package details
+	if cr.config.Verbose && len(coverage.Packages) > 0 {
+		fmt.Println()
+		fmt.Println("Package Coverage Details:")
+		fmt.Println()
+
+		packageData := make([][]string, 0, len(coverage.Packages))
+		for _, pkg := range coverage.Packages {
+			status := ""
+			if pkg.Error != "" {
+				status = fmt.Sprintf("Error: %s", pkg.Error)
+			} else if pkg.Skipped {
+				status = "No tests"
+			} else {
+				status = fmt.Sprintf("%.1f%%", pkg.Coverage)
+			}
+
+			packageData = append(packageData, []string{
+				pkg.PackagePath,
+				status,
+			})
+		}
+
+		pkgTable := tablewriter.NewWriter(os.Stdout)
+		pkgTable.SetHeader([]string{"Package", "Coverage"})
+		pkgTable.SetBorder(false)
+		pkgTable.SetColumnSeparator(" | ")
+		pkgTable.SetAlignment(tablewriter.ALIGN_LEFT)
+		pkgTable.AppendBulk(packageData)
+		pkgTable.Render()
+	}
+}
+
+func (cr *ConsoleReporter) printDependencyReport(dependencies *analyzer.DependencyReport) {
+	fmt.Println("DEPENDENCIES")
+	fmt.Println(strings.Repeat("-", 60))
+
+	// Summary
+	data := [][]string{
+		{"Total Packages", fmt.Sprintf("%d", dependencies.TotalPackages)},
+	}
+
+	if dependencies.HighImportCount > 0 {
+		data = append(data, []string{"Packages with High Imports", fmt.Sprintf("%d", dependencies.HighImportCount)})
+	}
+
+	if dependencies.HighExternalCount > 0 {
+		data = append(data, []string{"Packages with High External Deps", fmt.Sprintf("%d", dependencies.HighExternalCount)})
+	}
+
+	if len(dependencies.CircularDependencies) > 0 {
+		data = append(data, []string{"Circular Dependencies", fmt.Sprintf("%d", len(dependencies.CircularDependencies))})
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetBorder(false)
+	table.SetColumnSeparator("")
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.AppendBulk(data)
+	table.Render()
+
+	// Show circular dependencies if found
+	if len(dependencies.CircularDependencies) > 0 {
+		fmt.Println()
+		fmt.Println("⚠️  Circular Dependencies Detected:")
+		for i, cd := range dependencies.CircularDependencies {
+			fmt.Printf("  %d. %s\n", i+1, formatDependencyCycle(cd.Cycle))
+		}
+	}
+
+	// Verbose mode: per-package details
+	if cr.config.Verbose && len(dependencies.Packages) > 0 {
+		fmt.Println()
+		fmt.Println("Package Dependency Details:")
+		fmt.Println()
+
+		for _, pkg := range dependencies.Packages {
+			fmt.Printf("%s:\n", pkg.PackageName)
+			fmt.Printf("  Total Imports: %d (Stdlib: %d, Internal: %d, External: %d)\n",
+				pkg.TotalImports,
+				len(pkg.StdlibImports),
+				len(pkg.InternalImports),
+				len(pkg.ExternalImports))
+
+			if len(pkg.ExternalImports) > 0 {
+				fmt.Printf("  External Dependencies: %s\n", strings.Join(pkg.ExternalImports, ", "))
+			}
+			fmt.Println()
+		}
+	}
 }
 
 func (cr *ConsoleReporter) printFileDetails(files []*analyzer.FileAnalysis) {
@@ -242,9 +404,32 @@ func formatIssueType(issueType string) string {
 		return "Lines"
 	case "long_function":
 		return "Lines"
+	case "high_complexity":
+		return "Complexity"
+	case "too_many_parameters":
+		return "Parameters"
+	case "deep_nesting":
+		return "Nesting Depth"
+	case "too_many_returns":
+		return "Return Statements"
+	case "low_coverage":
+		return "Coverage"
+	case "too_many_imports":
+		return "Imports"
+	case "too_many_external_deps":
+		return "External Dependencies"
+	case "magic_number", "duplicate_error_handling", "circular_dependency":
+		return "" // These don't need value formatting
 	default:
 		return "Value"
 	}
+}
+
+func formatDependencyCycle(cycle []string) string {
+	if len(cycle) == 0 {
+		return ""
+	}
+	return strings.Join(cycle, " -> ")
 }
 
 func sumCommentLines(result *analyzer.AnalysisResult) int {

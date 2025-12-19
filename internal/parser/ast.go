@@ -143,8 +143,9 @@ func countFields(fields []*ast.Field) int {
 	return count
 }
 
-// calculateComplexity calculates simple cyclomatic complexity
-// Complexity = 1 + number of decision points (if, for, case, &&, ||)
+// calculateComplexity calculates cyclomatic complexity using McCabe's method
+// Complexity = 1 (base) + number of decision points
+// Decision points: if, for, range, case (non-default), select case, &&, ||
 func calculateComplexity(body *ast.BlockStmt) int {
 	complexity := 1 // Base complexity
 
@@ -152,21 +153,34 @@ func calculateComplexity(body *ast.BlockStmt) int {
 		switch node := n.(type) {
 		case *ast.IfStmt:
 			complexity++
+			// Note: else-if is handled by nested IfStmt
+
 		case *ast.ForStmt:
 			complexity++
+
 		case *ast.RangeStmt:
 			complexity++
+
+		case *ast.SwitchStmt:
+			// Counted through CaseClause below
+
+		case *ast.TypeSwitchStmt:
+			// Counted through CaseClause below
+
 		case *ast.CaseClause:
-			// Don't count default case
-			if node.List != nil {
+			// Each case adds a decision point (except default)
+			if node.List != nil && len(node.List) > 0 {
 				complexity++
 			}
+
 		case *ast.CommClause:
+			// Select case statements
 			if node.Comm != nil {
 				complexity++
 			}
+
 		case *ast.BinaryExpr:
-			// Count logical operators
+			// Count logical operators (they create additional paths)
 			if node.Op == token.LAND || node.Op == token.LOR {
 				complexity++
 			}

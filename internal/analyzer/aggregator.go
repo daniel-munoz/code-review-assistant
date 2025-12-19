@@ -16,13 +16,16 @@ func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions [
 		return metrics
 	}
 
-	// Calculate average function length
+	// Calculate average function length and complexity
 	if len(allFunctions) > 0 {
 		totalLines := 0
+		totalComplexity := 0
 		for _, fn := range allFunctions {
 			totalLines += fn.Lines
+			totalComplexity += fn.Complexity
 		}
 		metrics.AverageFunctionLength = float64(totalLines) / float64(len(allFunctions))
+		metrics.AverageComplexity = float64(totalComplexity) / float64(len(allFunctions))
 	}
 
 	// Calculate 95th percentile of function length
@@ -37,6 +40,20 @@ func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions [
 			p95Index = len(lengths) - 1
 		}
 		metrics.FunctionLengthP95 = lengths[p95Index]
+	}
+
+	// Calculate 95th percentile of complexity
+	if len(allFunctions) > 0 {
+		complexities := make([]int, len(allFunctions))
+		for i, fn := range allFunctions {
+			complexities[i] = fn.Complexity
+		}
+		sort.Ints(complexities)
+		p95Index := int(float64(len(complexities)) * 0.95)
+		if p95Index >= len(complexities) {
+			p95Index = len(complexities) - 1
+		}
+		metrics.ComplexityP95 = complexities[p95Index]
 	}
 
 	// Calculate overall comment ratio
@@ -68,6 +85,29 @@ func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions [
 		maxFiles = len(fileSizes)
 	}
 	metrics.LargestFiles = fileSizes[:maxFiles]
+
+	// Find most complex functions (top 10)
+	complexFunctions := make([]*FunctionInfo, 0, len(allFunctions))
+	for _, fm := range fileMetrics {
+		for _, fn := range fm.Functions {
+			complexFunctions = append(complexFunctions, &FunctionInfo{
+				File:       fm.FilePath,
+				Function:   fn.FullName(),
+				Complexity: fn.Complexity,
+				Lines:      fn.Lines,
+			})
+		}
+	}
+	sort.Slice(complexFunctions, func(i, j int) bool {
+		return complexFunctions[i].Complexity > complexFunctions[j].Complexity
+	})
+
+	// Take top 10 (or fewer if less than 10 functions)
+	maxFuncs := 10
+	if len(complexFunctions) < maxFuncs {
+		maxFuncs = len(complexFunctions)
+	}
+	metrics.MostComplexFunctions = complexFunctions[:maxFuncs]
 
 	return metrics
 }

@@ -152,8 +152,8 @@ func TestParseDirectory(t *testing.T) {
 		// Should have no errors
 		assert.Empty(t, errors, "should parse all files without errors")
 
-		// Should find all Go files (main.go, util.go, large.go, errors.go)
-		assert.Len(t, metricsSlice, 4, "should find 4 Go files")
+		// Should find all Go files (main.go, util.go, large.go, errors.go, antipatterns.go, complex.go)
+		assert.Len(t, metricsSlice, 6, "should find 6 Go files")
 
 		// Verify we got metrics for each file
 		fileNames := make(map[string]bool)
@@ -166,6 +166,8 @@ func TestParseDirectory(t *testing.T) {
 		assert.True(t, fileNames["util.go"], "should have parsed util.go")
 		assert.True(t, fileNames["large.go"], "should have parsed large.go")
 		assert.True(t, fileNames["errors.go"], "should have parsed errors.go")
+		assert.True(t, fileNames["antipatterns.go"], "should have parsed antipatterns.go")
+		assert.True(t, fileNames["complex.go"], "should have parsed complex.go")
 	})
 
 	t.Run("parse with exclusions", func(t *testing.T) {
@@ -174,8 +176,8 @@ func TestParseDirectory(t *testing.T) {
 
 		assert.Empty(t, errors, "should parse without errors")
 
-		// Should have 3 files (excluding large.go)
-		assert.Len(t, metricsSlice, 3, "should find 3 files after exclusion")
+		// Should have 5 files (excluding large.go from 6 total)
+		assert.Len(t, metricsSlice, 5, "should find 5 files after exclusion")
 
 		// Verify large.go was excluded
 		for _, m := range metricsSlice {

@@ -14,6 +14,24 @@ analysis:
   large_file_threshold: 500      # Lines - files exceeding this are flagged
   long_function_threshold: 50    # Lines - functions exceeding this are flagged
   min_comment_ratio: 0.15        # 15% - minimum recommended comment ratio
+  complexity_threshold: 10       # Cyclomatic complexity - functions exceeding this are flagged
+
+  # Anti-pattern detection
+  max_parameters: 5              # Maximum function parameters before flagging
+  max_nesting_depth: 4           # Maximum nesting depth before flagging
+  max_return_statements: 3       # Maximum return statements per function
+  detect_magic_numbers: true     # Detect numeric literals (excluding 0, 1, -1)
+  detect_duplicate_errors: true  # Detect repetitive error handling patterns
+
+  # Test coverage
+  enable_coverage: true          # Run go test -cover to analyze test coverage
+  min_coverage_threshold: 50.0   # Minimum coverage percentage (0-100)
+  coverage_timeout_seconds: 30   # Timeout for test execution per package
+
+  # Dependency analysis
+  max_imports: 10                # Maximum imports per package before flagging
+  max_external_dependencies: 10  # Maximum external dependencies per package
+  detect_circular_deps: true     # Detect circular dependencies between packages
 
 output:
   format: "console"               # Output format: console (json, markdown in future phases)
