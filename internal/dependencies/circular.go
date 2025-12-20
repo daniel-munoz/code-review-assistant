@@ -13,93 +13,136 @@ type CircularDependency struct {
 
 // DetectCircularDependencies finds circular dependencies using DFS
 func (a *Analyzer) DetectCircularDependencies(files []*parser.FileMetrics) ([]*CircularDependency, error) {
-	// Build dependency graph: package -> packages it imports
-	graph := make(map[string][]string)
+	graph := a.buildDependencyGraph(files)
+	detector := newCycleDetector(graph)
+	return detector.findCycles(), nil
+}
 
-	// Group files by package and collect internal imports
+// buildDependencyGraph creates a graph of internal package dependencies
+func (a *Analyzer) buildDependencyGraph(files []*parser.FileMetrics) map[string][]string {
+	// Group files by package
+	packageFiles := groupFilesByPackage(files)
+
+	// Build graph of internal dependencies only
+	graph := make(map[string][]string)
+	for pkgName, pkgFiles := range packageFiles {
+		imports := a.extractInternalImports(pkgFiles)
+		graph[pkgName] = imports
+	}
+
+	return graph
+}
+
+// groupFilesByPackage groups files by their package name
+func groupFilesByPackage(files []*parser.FileMetrics) map[string][]*parser.FileMetrics {
 	packageFiles := make(map[string][]*parser.FileMetrics)
 	for _, file := range files {
 		packageFiles[file.PackageName] = append(packageFiles[file.PackageName], file)
 	}
+	return packageFiles
+}
 
-	// Build graph of internal dependencies only
-	for pkgName, pkgFiles := range packageFiles {
-		importSet := make(map[string]bool)
-		for _, file := range pkgFiles {
-			for _, imp := range file.Imports {
-				// Only track internal imports for circular dependency detection
-				if a.categorizeImport(imp) == "internal" {
-					// Extract package name from import path
-					// e.g., "github.com/user/project/internal/parser" -> "parser"
-					parts := strings.Split(imp, "/")
-					if len(parts) > 0 {
-						importedPkg := parts[len(parts)-1]
-						importSet[importedPkg] = true
-					}
+// extractInternalImports extracts unique internal package imports from files
+func (a *Analyzer) extractInternalImports(files []*parser.FileMetrics) []string {
+	importSet := make(map[string]bool)
+	for _, file := range files {
+		for _, imp := range file.Imports {
+			if a.categorizeImport(imp) == "internal" {
+				// Extract package name from import path
+				parts := strings.Split(imp, "/")
+				if len(parts) > 0 {
+					importedPkg := parts[len(parts)-1]
+					importSet[importedPkg] = true
 				}
 			}
 		}
-
-		// Convert set to slice
-		for imp := range importSet {
-			graph[pkgName] = append(graph[pkgName], imp)
-		}
 	}
 
-	// Find cycles using DFS
-	var cycles []*CircularDependency
-	visited := make(map[string]bool)
-	recStack := make(map[string]bool)
-	path := []string{}
+	// Convert set to slice
+	var imports []string
+	for imp := range importSet {
+		imports = append(imports, imp)
+	}
+	return imports
+}
 
-	var dfs func(string) bool
-	dfs = func(node string) bool {
-		visited[node] = true
-		recStack[node] = true
-		path = append(path, node)
+// cycleDetector encapsulates DFS state for cycle detection
+type cycleDetector struct {
+	graph    map[string][]string
+	visited  map[string]bool
+	recStack map[string]bool
+	path     []string
+	cycles   []*CircularDependency
+}
 
-		for _, neighbor := range graph[node] {
-			if !visited[neighbor] {
-				if dfs(neighbor) {
-					return true
-				}
-			} else if recStack[neighbor] {
-				// Found a cycle - extract the cycle from path
-				cycleStart := -1
-				for i, p := range path {
-					if p == neighbor {
-						cycleStart = i
-						break
-					}
-				}
-				if cycleStart >= 0 {
-					cycle := make([]string, len(path)-cycleStart)
-					copy(cycle, path[cycleStart:])
-					cycle = append(cycle, neighbor) // Close the cycle
+// newCycleDetector creates a new cycle detector
+func newCycleDetector(graph map[string][]string) *cycleDetector {
+	return &cycleDetector{
+		graph:    graph,
+		visited:  make(map[string]bool),
+		recStack: make(map[string]bool),
+		path:     []string{},
+		cycles:   []*CircularDependency{},
+	}
+}
 
-					// Check if this cycle is new (not a duplicate)
-					if !isDuplicateCycle(cycles, cycle) {
-						cycles = append(cycles, &CircularDependency{
-							Cycle: cycle,
-						})
-					}
-				}
+// findCycles finds all cycles in the graph using DFS
+func (d *cycleDetector) findCycles() []*CircularDependency {
+	for node := range d.graph {
+		if !d.visited[node] {
+			d.dfs(node)
+		}
+	}
+	return d.cycles
+}
+
+// dfs performs depth-first search to detect cycles
+func (d *cycleDetector) dfs(node string) bool {
+	d.visited[node] = true
+	d.recStack[node] = true
+	d.path = append(d.path, node)
+
+	for _, neighbor := range d.graph[node] {
+		if !d.visited[neighbor] {
+			if d.dfs(neighbor) {
+				return true
 			}
-		}
-
-		path = path[:len(path)-1]
-		recStack[node] = false
-		return false
-	}
-
-	// Run DFS from each unvisited node
-	for node := range graph {
-		if !visited[node] {
-			dfs(node)
+		} else if d.recStack[neighbor] {
+			d.addCycleIfNew(neighbor)
 		}
 	}
 
-	return cycles, nil
+	d.path = d.path[:len(d.path)-1]
+	d.recStack[node] = false
+	return false
+}
+
+// addCycleIfNew extracts and adds a cycle if it's not a duplicate
+func (d *cycleDetector) addCycleIfNew(neighbor string) {
+	cycle := d.extractCycle(neighbor)
+	if cycle != nil && !isDuplicateCycle(d.cycles, cycle) {
+		d.cycles = append(d.cycles, &CircularDependency{Cycle: cycle})
+	}
+}
+
+// extractCycle extracts the cycle from the current path
+func (d *cycleDetector) extractCycle(neighbor string) []string {
+	cycleStart := -1
+	for i, p := range d.path {
+		if p == neighbor {
+			cycleStart = i
+			break
+		}
+	}
+
+	if cycleStart < 0 {
+		return nil
+	}
+
+	cycle := make([]string, len(d.path)-cycleStart)
+	copy(cycle, d.path[cycleStart:])
+	cycle = append(cycle, neighbor) // Close the cycle
+	return cycle
 }
 
 // isDuplicateCycle checks if a cycle already exists in the list

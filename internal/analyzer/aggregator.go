@@ -16,58 +16,82 @@ func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions [
 		return metrics
 	}
 
-	// Calculate average function length and complexity
-	if len(allFunctions) > 0 {
-		totalLines := 0
-		totalComplexity := 0
-		for _, fn := range allFunctions {
-			totalLines += fn.Lines
-			totalComplexity += fn.Complexity
-		}
-		metrics.AverageFunctionLength = float64(totalLines) / float64(len(allFunctions))
-		metrics.AverageComplexity = float64(totalComplexity) / float64(len(allFunctions))
+	calculateFunctionAverages(metrics, allFunctions)
+	calculatePercentiles(metrics, allFunctions)
+	metrics.CommentRatio = calculateCommentRatio(fileMetrics)
+	metrics.LargestFiles = findLargestFiles(fileMetrics, 10)
+	metrics.MostComplexFunctions = findMostComplexFunctions(fileMetrics, 10)
+
+	return metrics
+}
+
+// calculateFunctionAverages calculates average function length and complexity
+func calculateFunctionAverages(metrics *AggregateMetrics, allFunctions []*parser.FunctionMetrics) {
+	if len(allFunctions) == 0 {
+		return
 	}
 
-	// Calculate 95th percentile of function length
-	if len(allFunctions) > 0 {
-		lengths := make([]int, len(allFunctions))
-		for i, fn := range allFunctions {
-			lengths[i] = fn.Lines
-		}
-		sort.Ints(lengths)
-		p95Index := int(float64(len(lengths)) * 0.95)
-		if p95Index >= len(lengths) {
-			p95Index = len(lengths) - 1
-		}
-		metrics.FunctionLengthP95 = lengths[p95Index]
+	totalLines := 0
+	totalComplexity := 0
+	for _, fn := range allFunctions {
+		totalLines += fn.Lines
+		totalComplexity += fn.Complexity
 	}
 
-	// Calculate 95th percentile of complexity
-	if len(allFunctions) > 0 {
-		complexities := make([]int, len(allFunctions))
-		for i, fn := range allFunctions {
-			complexities[i] = fn.Complexity
-		}
-		sort.Ints(complexities)
-		p95Index := int(float64(len(complexities)) * 0.95)
-		if p95Index >= len(complexities) {
-			p95Index = len(complexities) - 1
-		}
-		metrics.ComplexityP95 = complexities[p95Index]
+	metrics.AverageFunctionLength = float64(totalLines) / float64(len(allFunctions))
+	metrics.AverageComplexity = float64(totalComplexity) / float64(len(allFunctions))
+}
+
+// calculatePercentiles calculates 95th percentile for function length and complexity
+func calculatePercentiles(metrics *AggregateMetrics, allFunctions []*parser.FunctionMetrics) {
+	if len(allFunctions) == 0 {
+		return
 	}
 
-	// Calculate overall comment ratio
+	metrics.FunctionLengthP95 = calculateP95(allFunctions, func(fn *parser.FunctionMetrics) int {
+		return fn.Lines
+	})
+
+	metrics.ComplexityP95 = calculateP95(allFunctions, func(fn *parser.FunctionMetrics) int {
+		return fn.Complexity
+	})
+}
+
+// calculateP95 calculates the 95th percentile of a metric
+func calculateP95(functions []*parser.FunctionMetrics, getValue func(*parser.FunctionMetrics) int) int {
+	values := make([]int, len(functions))
+	for i, fn := range functions {
+		values[i] = getValue(fn)
+	}
+
+	sort.Ints(values)
+	p95Index := int(float64(len(values)) * 0.95)
+	if p95Index >= len(values) {
+		p95Index = len(values) - 1
+	}
+
+	return values[p95Index]
+}
+
+// calculateCommentRatio calculates the overall comment ratio across all files
+func calculateCommentRatio(fileMetrics []*parser.FileMetrics) float64 {
 	totalLines := 0
 	totalComments := 0
+
 	for _, fm := range fileMetrics {
 		totalLines += fm.TotalLines
 		totalComments += fm.CommentLines
 	}
-	if totalLines > 0 {
-		metrics.CommentRatio = float64(totalComments) / float64(totalLines)
+
+	if totalLines == 0 {
+		return 0
 	}
 
-	// Find largest files (top 10)
+	return float64(totalComments) / float64(totalLines)
+}
+
+// findLargestFiles returns the top N largest files by line count
+func findLargestFiles(fileMetrics []*parser.FileMetrics, limit int) []*FileSize {
 	fileSizes := make([]*FileSize, len(fileMetrics))
 	for i, fm := range fileMetrics {
 		fileSizes[i] = &FileSize{
@@ -75,22 +99,25 @@ func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions [
 			Lines: fm.TotalLines,
 		}
 	}
+
 	sort.Slice(fileSizes, func(i, j int) bool {
 		return fileSizes[i].Lines > fileSizes[j].Lines
 	})
 
-	// Take top 10 (or fewer if less than 10 files)
-	maxFiles := 10
-	if len(fileSizes) < maxFiles {
-		maxFiles = len(fileSizes)
+	if len(fileSizes) < limit {
+		limit = len(fileSizes)
 	}
-	metrics.LargestFiles = fileSizes[:maxFiles]
 
-	// Find most complex functions (top 10)
-	complexFunctions := make([]*FunctionInfo, 0, len(allFunctions))
+	return fileSizes[:limit]
+}
+
+// findMostComplexFunctions returns the top N most complex functions
+func findMostComplexFunctions(fileMetrics []*parser.FileMetrics, limit int) []*FunctionInfo {
+	var functions []*FunctionInfo
+
 	for _, fm := range fileMetrics {
 		for _, fn := range fm.Functions {
-			complexFunctions = append(complexFunctions, &FunctionInfo{
+			functions = append(functions, &FunctionInfo{
 				File:       fm.FilePath,
 				Function:   fn.FullName(),
 				Complexity: fn.Complexity,
@@ -98,18 +125,16 @@ func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions [
 			})
 		}
 	}
-	sort.Slice(complexFunctions, func(i, j int) bool {
-		return complexFunctions[i].Complexity > complexFunctions[j].Complexity
+
+	sort.Slice(functions, func(i, j int) bool {
+		return functions[i].Complexity > functions[j].Complexity
 	})
 
-	// Take top 10 (or fewer if less than 10 functions)
-	maxFuncs := 10
-	if len(complexFunctions) < maxFuncs {
-		maxFuncs = len(complexFunctions)
+	if len(functions) < limit {
+		limit = len(functions)
 	}
-	metrics.MostComplexFunctions = complexFunctions[:maxFuncs]
 
-	return metrics
+	return functions[:limit]
 }
 
 // SortIssuesBySeverity sorts issues by severity and then by file

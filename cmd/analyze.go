@@ -62,25 +62,64 @@ func init() {
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
-	// Determine target path
-	targetPath = "."
+	// Determine and validate target path
+	targetPath = getTargetPath(args)
+	if err := validatePath(targetPath); err != nil {
+		return err
+	}
+
+	// Load and configure
+	cfg, err := loadAndMergeConfig(cmd)
+	if err != nil {
+		return err
+	}
+
+	// Execute analysis
+	return executeAnalysis(cfg, targetPath)
+}
+
+// getTargetPath determines the target path from command arguments
+func getTargetPath(args []string) string {
 	if len(args) > 0 {
-		targetPath = args[0]
+		return args[0]
 	}
+	return "."
+}
 
-	// Verify target path exists
-	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-		return fmt.Errorf("path does not exist: %s", targetPath)
+// validatePath verifies that the target path exists
+func validatePath(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("path does not exist: %s", path)
 	}
+	return nil
+}
 
-	// Load configuration
+// loadAndMergeConfig loads configuration and applies CLI flag overrides
+func loadAndMergeConfig(cmd *cobra.Command) (*config.Config, error) {
 	cfg, err := config.LoadConfig(GetConfigFile())
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Apply CLI flag overrides
+	overrides := buildOverridesMap(cmd)
+	cfg.Merge(overrides)
+	return cfg, nil
+}
+
+// buildOverridesMap constructs the overrides map from CLI flags
+func buildOverridesMap(cmd *cobra.Command) map[string]interface{} {
 	overrides := make(map[string]interface{})
+
+	addAnalysisOverrides(overrides)
+	addCoverageOverrides(overrides, cmd)
+	addDependencyOverrides(overrides, cmd)
+	addOutputOverrides(overrides)
+
+	return overrides
+}
+
+// addAnalysisOverrides adds Phase 1 analysis threshold overrides
+func addAnalysisOverrides(overrides map[string]interface{}) {
 	if largeFileThreshold > 0 {
 		overrides["large_file_threshold"] = largeFileThreshold
 	}
@@ -90,15 +129,13 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	if complexityThreshold > 0 {
 		overrides["complexity_threshold"] = complexityThreshold
 	}
-	if outputFormat != "" {
-		overrides["format"] = outputFormat
-	}
-	if IsVerbose() {
-		overrides["verbose"] = true
-	}
 	if len(excludePatterns) > 0 {
 		overrides["exclude"] = excludePatterns
 	}
+}
+
+// addCoverageOverrides adds Phase 2.3 coverage setting overrides
+func addCoverageOverrides(overrides map[string]interface{}, cmd *cobra.Command) {
 	if cmd.Flags().Changed("enable-coverage") {
 		overrides["enable_coverage"] = enableCoverage
 	}
@@ -108,6 +145,10 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	if coverageTimeout > 0 {
 		overrides["coverage_timeout"] = coverageTimeout
 	}
+}
+
+// addDependencyOverrides adds Phase 2.4 dependency setting overrides
+func addDependencyOverrides(overrides map[string]interface{}, cmd *cobra.Command) {
 	if maxImports > 0 {
 		overrides["max_imports"] = maxImports
 	}
@@ -117,9 +158,20 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("detect-circular-deps") {
 		overrides["detect_circular_deps"] = detectCircularDeps
 	}
-	cfg.Merge(overrides)
+}
 
-	// Create and run orchestrator
+// addOutputOverrides adds output configuration overrides
+func addOutputOverrides(overrides map[string]interface{}) {
+	if outputFormat != "" {
+		overrides["format"] = outputFormat
+	}
+	if IsVerbose() {
+		overrides["verbose"] = true
+	}
+}
+
+// executeAnalysis creates the orchestrator and runs the analysis
+func executeAnalysis(cfg *config.Config, targetPath string) error {
 	orch, err := orchestrator.New(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create orchestrator: %w", err)

@@ -153,55 +153,81 @@ func LoadConfig(configPath string) (*Config, error) {
 
 // Merge merges CLI flag overrides into the config
 func (c *Config) Merge(overrides map[string]interface{}) {
-	if val, ok := overrides["large_file_threshold"].(int); ok && val > 0 {
-		c.Analysis.LargeFileThreshold = val
-	}
-	if val, ok := overrides["long_function_threshold"].(int); ok && val > 0 {
-		c.Analysis.LongFunctionThreshold = val
-	}
-	if val, ok := overrides["complexity_threshold"].(int); ok && val > 0 {
-		c.Analysis.ComplexityThreshold = val
-	}
-	if val, ok := overrides["max_parameters"].(int); ok && val > 0 {
-		c.Analysis.MaxParameters = val
-	}
-	if val, ok := overrides["max_nesting_depth"].(int); ok && val > 0 {
-		c.Analysis.MaxNestingDepth = val
-	}
-	if val, ok := overrides["max_return_statements"].(int); ok && val > 0 {
-		c.Analysis.MaxReturnStatements = val
-	}
-	if val, ok := overrides["detect_magic_numbers"].(bool); ok {
-		c.Analysis.DetectMagicNumbers = val
-	}
-	if val, ok := overrides["detect_duplicate_errors"].(bool); ok {
-		c.Analysis.DetectDuplicateErrors = val
-	}
-	if val, ok := overrides["enable_coverage"].(bool); ok {
-		c.Analysis.EnableCoverage = val
-	}
-	if val, ok := overrides["min_coverage_threshold"].(float64); ok && val > 0 {
-		c.Analysis.MinCoverageThreshold = val
-	}
-	if val, ok := overrides["coverage_timeout"].(int); ok && val > 0 {
-		c.Analysis.CoverageTimeout = val
-	}
-	if val, ok := overrides["max_imports"].(int); ok && val > 0 {
-		c.Analysis.MaxImports = val
-	}
-	if val, ok := overrides["max_external_dependencies"].(int); ok && val > 0 {
-		c.Analysis.MaxExternalDependencies = val
-	}
-	if val, ok := overrides["detect_circular_deps"].(bool); ok {
-		c.Analysis.DetectCircularDeps = val
-	}
-	if val, ok := overrides["format"].(string); ok && val != "" {
-		c.Output.Format = val
-	}
-	if val, ok := overrides["verbose"].(bool); ok {
-		c.Output.Verbose = val
-	}
+	c.mergeAnalysisThresholds(overrides)
+	c.mergeAntiPatternSettings(overrides)
+	c.mergeCoverageSettings(overrides)
+	c.mergeDependencySettings(overrides)
+	c.mergeOutputSettings(overrides)
+	c.mergeExcludePatterns(overrides)
+}
+
+// mergeAnalysisThresholds merges Phase 1 analysis threshold overrides
+func (c *Config) mergeAnalysisThresholds(overrides map[string]interface{}) {
+	mergeIntIfPositive(&c.Analysis.LargeFileThreshold, overrides, "large_file_threshold")
+	mergeIntIfPositive(&c.Analysis.LongFunctionThreshold, overrides, "long_function_threshold")
+	mergeIntIfPositive(&c.Analysis.ComplexityThreshold, overrides, "complexity_threshold")
+}
+
+// mergeAntiPatternSettings merges Phase 2.2 anti-pattern detection settings
+func (c *Config) mergeAntiPatternSettings(overrides map[string]interface{}) {
+	mergeIntIfPositive(&c.Analysis.MaxParameters, overrides, "max_parameters")
+	mergeIntIfPositive(&c.Analysis.MaxNestingDepth, overrides, "max_nesting_depth")
+	mergeIntIfPositive(&c.Analysis.MaxReturnStatements, overrides, "max_return_statements")
+	mergeBool(&c.Analysis.DetectMagicNumbers, overrides, "detect_magic_numbers")
+	mergeBool(&c.Analysis.DetectDuplicateErrors, overrides, "detect_duplicate_errors")
+}
+
+// mergeCoverageSettings merges Phase 2.3 test coverage settings
+func (c *Config) mergeCoverageSettings(overrides map[string]interface{}) {
+	mergeBool(&c.Analysis.EnableCoverage, overrides, "enable_coverage")
+	mergeFloatIfPositive(&c.Analysis.MinCoverageThreshold, overrides, "min_coverage_threshold")
+	mergeIntIfPositive(&c.Analysis.CoverageTimeout, overrides, "coverage_timeout")
+}
+
+// mergeDependencySettings merges Phase 2.4 dependency analysis settings
+func (c *Config) mergeDependencySettings(overrides map[string]interface{}) {
+	mergeIntIfPositive(&c.Analysis.MaxImports, overrides, "max_imports")
+	mergeIntIfPositive(&c.Analysis.MaxExternalDependencies, overrides, "max_external_dependencies")
+	mergeBool(&c.Analysis.DetectCircularDeps, overrides, "detect_circular_deps")
+}
+
+// mergeOutputSettings merges output configuration settings
+func (c *Config) mergeOutputSettings(overrides map[string]interface{}) {
+	mergeStringIfNonEmpty(&c.Output.Format, overrides, "format")
+	mergeBool(&c.Output.Verbose, overrides, "verbose")
+}
+
+// mergeExcludePatterns appends additional exclude patterns if provided
+func (c *Config) mergeExcludePatterns(overrides map[string]interface{}) {
 	if val, ok := overrides["exclude"].([]string); ok && len(val) > 0 {
 		c.Analysis.ExcludePatterns = append(c.Analysis.ExcludePatterns, val...)
+	}
+}
+
+// mergeIntIfPositive updates target with override value if it exists and is positive
+func mergeIntIfPositive(target *int, overrides map[string]interface{}, key string) {
+	if val, ok := overrides[key].(int); ok && val > 0 {
+		*target = val
+	}
+}
+
+// mergeBool updates target with override value if it exists
+func mergeBool(target *bool, overrides map[string]interface{}, key string) {
+	if val, ok := overrides[key].(bool); ok {
+		*target = val
+	}
+}
+
+// mergeFloatIfPositive updates target with override value if it exists and is positive
+func mergeFloatIfPositive(target *float64, overrides map[string]interface{}, key string) {
+	if val, ok := overrides[key].(float64); ok && val > 0 {
+		*target = val
+	}
+}
+
+// mergeStringIfNonEmpty updates target with override value if it exists and is non-empty
+func mergeStringIfNonEmpty(target *string, overrides map[string]interface{}, key string) {
+	if val, ok := overrides[key].(string); ok && val != "" {
+		*target = val
 	}
 }

@@ -111,82 +111,110 @@ func shouldExclude(path string, rootPath string, patterns []string) bool {
 // matchPattern performs simple glob-style pattern matching
 // Supports: **, *, ?
 func matchPattern(path, pattern string) bool {
-	// Simple implementation for common patterns
 	pattern = filepath.ToSlash(pattern)
 
-	// Handle ** (match any directories)
 	if strings.Contains(pattern, "**") {
-		// Pattern types:
-		// "vendor/**" - matches vendor/ and everything under it
-		// "**/vendor/**" - matches any path with vendor as a directory component
-		// "**/*.go" - matches any .go file
-		// "**/testdata/**" - matches any path containing testdata directory
-
-		parts := strings.Split(pattern, "**")
-
-		// Check if pattern starts with a specific directory (not **)
-		startsWithPrefix := parts[0] != "" && !strings.HasPrefix(pattern, "**")
-
-		// Extract non-empty parts (these must appear in the path)
-		var matchers []string
-		for i, part := range parts {
-			part = strings.Trim(part, "/")
-			if part != "" {
-				// For suffix (last part), handle specially if it has wildcards
-				if i == len(parts)-1 && (strings.Contains(part, "*") || strings.Contains(part, "?")) {
-					// Suffix with wildcards - match basename
-					matched, _ := filepath.Match(part, filepath.Base(path))
-					return matched
-				}
-				matchers = append(matchers, part)
-			}
-		}
-
-		// If no matchers, pattern is just "**" - matches everything
-		if len(matchers) == 0 {
-			return true
-		}
-
-		// Check matchers against path
-		pathComponents := strings.Split(path, "/")
-		matcherIdx := 0
-		startIdx := 0
-
-		// If pattern starts with a prefix (like "vendor/**"), first matcher must be at start
-		if startsWithPrefix && len(pathComponents) > 0 {
-			if pathComponents[0] != matchers[0] {
-				return false
-			}
-			matcherIdx = 1
-			startIdx = 1
-		}
-
-		// Match remaining matchers in order
-		for i := startIdx; i < len(pathComponents) && matcherIdx < len(matchers); i++ {
-			if pathComponents[i] == matchers[matcherIdx] {
-				matcherIdx++
-			}
-		}
-
-		// All matchers should be found
-		return matcherIdx == len(matchers)
+		return matchDoubleStarPattern(path, pattern)
 	}
 
-	// Handle patterns with * but not **
 	if strings.Contains(pattern, "*") || strings.Contains(pattern, "?") {
-		// Try matching the full path first
-		matched, err := filepath.Match(pattern, path)
-		if err == nil && matched {
-			return true
-		}
-		// Also try matching just the basename
-		matched, err = filepath.Match(pattern, filepath.Base(path))
-		if err == nil && matched {
-			return true
-		}
+		return matchSingleWildcardPattern(path, pattern)
+	}
+
+	return matchExactPattern(path, pattern)
+}
+
+// matchDoubleStarPattern handles patterns with ** (match any directories)
+// Examples: "vendor/**", "**/vendor/**", "**/*.go", "**/testdata/**"
+func matchDoubleStarPattern(path, pattern string) bool {
+	parts := strings.Split(pattern, "**")
+
+	// Check if pattern starts with a specific directory (not **)
+	startsWithPrefix := parts[0] != "" && !strings.HasPrefix(pattern, "**")
+
+	// Extract non-empty parts (these must appear in the path)
+	matchers := extractPatternMatchers(parts, path)
+	if matchers == nil {
+		// Special case: suffix with wildcards already matched
+		return true
+	}
+
+	// Check for sentinel value indicating wildcard suffix didn't match
+	if len(matchers) == 1 && matchers[0] == "__NO_MATCH__" {
 		return false
 	}
 
-	// Exact match
+	// If no matchers, pattern is just "**" - matches everything
+	if len(matchers) == 0 {
+		return true
+	}
+
+	return matchPathComponents(path, matchers, startsWithPrefix)
+}
+
+// extractPatternMatchers extracts non-empty parts from pattern that must appear in path
+// Returns matchers slice and a boolean indicating if a wildcard suffix was checked
+// If wildcard suffix was checked and didn't match, matchers will have a sentinel value
+func extractPatternMatchers(parts []string, path string) []string {
+	var matchers []string
+	for i, part := range parts {
+		part = strings.Trim(part, "/")
+		if part != "" {
+			// For suffix (last part), handle specially if it has wildcards
+			if i == len(parts)-1 && (strings.Contains(part, "*") || strings.Contains(part, "?")) {
+				// Suffix with wildcards - match basename
+				matched, _ := filepath.Match(part, filepath.Base(path))
+				if matched {
+					return nil // Signal: wildcard suffix matched, return true
+				}
+				// Wildcard suffix didn't match - use sentinel value to signal failure
+				return []string{"__NO_MATCH__"}
+			}
+			matchers = append(matchers, part)
+		}
+	}
+	return matchers
+}
+
+// matchPathComponents matches path components against pattern matchers
+func matchPathComponents(path string, matchers []string, startsWithPrefix bool) bool {
+	pathComponents := strings.Split(path, "/")
+	matcherIdx := 0
+	startIdx := 0
+
+	// If pattern starts with a prefix (like "vendor/**"), first matcher must be at start
+	if startsWithPrefix && len(pathComponents) > 0 {
+		if pathComponents[0] != matchers[0] {
+			return false
+		}
+		matcherIdx = 1
+		startIdx = 1
+	}
+
+	// Match remaining matchers in order
+	for i := startIdx; i < len(pathComponents) && matcherIdx < len(matchers); i++ {
+		if pathComponents[i] == matchers[matcherIdx] {
+			matcherIdx++
+		}
+	}
+
+	// All matchers should be found
+	return matcherIdx == len(matchers)
+}
+
+// matchSingleWildcardPattern handles patterns with * or ? (single wildcards)
+func matchSingleWildcardPattern(path, pattern string) bool {
+	// Try matching the full path first
+	matched, err := filepath.Match(pattern, path)
+	if err == nil && matched {
+		return true
+	}
+	// Also try matching just the basename
+	matched, err = filepath.Match(pattern, filepath.Base(path))
+	return err == nil && matched
+}
+
+// matchExactPattern handles exact path matching
+func matchExactPattern(path, pattern string) bool {
 	return path == pattern || strings.HasPrefix(path, pattern+"/")
 }
