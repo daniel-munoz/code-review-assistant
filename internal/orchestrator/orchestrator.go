@@ -9,7 +9,15 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/reporter"
 )
 
-// Orchestrator coordinates the analysis pipeline
+// Orchestrator coordinates the complete code analysis pipeline.
+//
+// The orchestrator implements the three-stage analysis workflow:
+//   1. Parse: Discover and parse all Go source files
+//   2. Analyze: Apply metrics and quality checks
+//   3. Report: Format and output results
+//
+// Each stage is delegated to specialized components (Parser, Analyzer, Reporter)
+// that are configured and initialized based on the provided Config.
 type Orchestrator struct {
 	config   *config.Config
 	parser   parser.Parser
@@ -17,7 +25,14 @@ type Orchestrator struct {
 	reporter reporter.Reporter
 }
 
-// New creates a new Orchestrator with the given configuration
+// New creates a new Orchestrator with the given configuration.
+//
+// This function initializes all pipeline components:
+//   - Parser: for AST-based metrics extraction
+//   - Analyzer: for applying thresholds and detecting issues
+//   - Reporter: for formatted output (based on config.Output.Format)
+//
+// Returns an error if reporter creation fails (e.g., unsupported format).
 func New(cfg *config.Config) (*Orchestrator, error) {
 	// Create parser
 	p := parser.NewParser()
@@ -39,7 +54,33 @@ func New(cfg *config.Config) (*Orchestrator, error) {
 	}, nil
 }
 
-// Run executes the analysis pipeline on the target path
+// Run executes the complete analysis pipeline on the specified directory.
+//
+// The pipeline consists of three stages:
+//
+//  1. Parse Stage:
+//     - Recursively discovers all .go files in targetPath
+//     - Applies exclude patterns (vendor/, testdata/, etc.)
+//     - Parses each file to extract metrics
+//     - Reports parse errors but continues with successful files
+//
+//  2. Analyze Stage:
+//     - Applies thresholds to detect issues
+//     - Runs anti-pattern detectors
+//     - Executes test coverage analysis (if enabled)
+//     - Performs dependency analysis
+//
+//  3. Report Stage:
+//     - Formats results according to configured output format
+//     - Outputs to console or other configured destination
+//
+// Returns an error if:
+//   - No Go files are found in targetPath
+//   - Analysis fails (unexpected internal error)
+//   - Reporting fails (output error)
+//
+// Parse errors for individual files are reported as warnings but don't fail
+// the overall pipeline, allowing partial analysis when some files are malformed.
 func (o *Orchestrator) Run(targetPath string) error {
 	// Step 1: Parse all Go files
 	fileMetrics, parseErrors := o.parser.ParseDirectory(targetPath, o.config.Analysis.ExcludePatterns)

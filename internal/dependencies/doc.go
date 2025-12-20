@@ -1,0 +1,40 @@
+// Package dependencies analyzes import dependencies in Go projects.
+//
+// The dependency analyzer categorizes imports into three types:
+// - Standard library (e.g., fmt, os, strings)
+// - Internal packages (within the same module)
+// - External packages (third-party dependencies)
+//
+// It also detects circular dependencies between internal packages using
+// depth-first search (DFS) with cycle detection.
+//
+// # Import Categorization
+//
+// The analyzer uses the following heuristics:
+// - Imports without a dot in the first path element are stdlib
+// - golang.org/x/* imports are treated as stdlib
+// - Imports matching the module path are internal
+// - All other imports are external
+//
+// # Circular Dependency Detection
+//
+// Circular dependencies are detected using DFS traversal of the dependency graph.
+// Only internal packages are considered for cycle detection. The algorithm:
+// 1. Builds a graph of package -> imported packages
+// 2. Runs DFS from each unvisited node
+// 3. Detects back edges (cycles) during traversal
+// 4. Normalizes and deduplicates cycles
+//
+// # Usage
+//
+//	analyzer, err := dependencies.NewAnalyzer("/path/to/project")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Analyze imports
+//	deps, err := analyzer.Analyze(fileMetrics)
+//
+//	// Detect circular dependencies
+//	cycles, err := analyzer.DetectCircularDependencies(fileMetrics)
+package dependencies

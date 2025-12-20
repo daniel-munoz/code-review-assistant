@@ -3,13 +3,14 @@ package analyzer
 import (
 	"sort"
 
+	"github.com/daniel-munoz/code-review-assistant/internal/constants"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 )
 
 // calculateAggregateMetrics computes aggregate metrics from file metrics
 func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions []*parser.FunctionMetrics) *AggregateMetrics {
 	metrics := &AggregateMetrics{
-		LargestFiles: make([]*FileSize, 0, 10),
+		LargestFiles: make([]*FileSize, 0, constants.TopFilesLimit),
 	}
 
 	if len(fileMetrics) == 0 {
@@ -19,8 +20,8 @@ func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions [
 	calculateFunctionAverages(metrics, allFunctions)
 	calculatePercentiles(metrics, allFunctions)
 	metrics.CommentRatio = calculateCommentRatio(fileMetrics)
-	metrics.LargestFiles = findLargestFiles(fileMetrics, 10)
-	metrics.MostComplexFunctions = findMostComplexFunctions(fileMetrics, 10)
+	metrics.LargestFiles = findLargestFiles(fileMetrics, constants.TopFilesLimit)
+	metrics.MostComplexFunctions = findMostComplexFunctions(fileMetrics, constants.TopComplexFunctionsLimit)
 
 	return metrics
 }
@@ -65,7 +66,7 @@ func calculateP95(functions []*parser.FunctionMetrics, getValue func(*parser.Fun
 	}
 
 	sort.Ints(values)
-	p95Index := int(float64(len(values)) * 0.95)
+	p95Index := int(float64(len(values)) * constants.Percentile95)
 	if p95Index >= len(values) {
 		p95Index = len(values) - 1
 	}

@@ -74,6 +74,20 @@ func countErrorChecks(body *ast.BlockStmt) int {
 	return count
 }
 
+// isErrorCheck determines if an AST expression is an error nil-check pattern.
+//
+// This function detects the common Go idiom of checking if an error is not nil.
+// It recognizes both standard patterns:
+//   - "err != nil" (left-hand error, right-hand nil)
+//   - "nil != err" (left-hand nil, right-hand error)
+//
+// The check is strict: it only matches binary expressions with the NEQ operator
+// where one operand is an identifier named "err" and the other is the identifier
+// "nil". This conservative approach avoids false positives from custom error
+// variables or comparison expressions.
+//
+// Returns true if the expression matches either error-checking pattern,
+// false otherwise.
 func isErrorCheck(expr ast.Expr) bool {
 	binExpr, ok := expr.(*ast.BinaryExpr)
 	if !ok || binExpr.Op != token.NEQ {

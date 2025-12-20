@@ -18,7 +18,7 @@ to provide actionable insights about code quality, complexity, and maintainabili
 
 It helps developers identify technical debt, track metrics, and maintain
 high code quality standards.`,
-	Version: "0.2.0 (Phase 2)",
+	Version: "0.2.1 (Phase 2)",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

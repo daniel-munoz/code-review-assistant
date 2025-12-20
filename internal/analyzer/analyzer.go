@@ -37,7 +37,38 @@ func NewAnalyzer(cfg *config.AnalysisConfig) Analyzer {
 	}
 }
 
-// Analyze performs analysis on the parsed metrics
+// Analyze performs comprehensive code quality analysis on parsed file metrics.
+//
+// This is the main analysis pipeline that orchestrates all analysis phases:
+//
+// 1. Metrics Aggregation:
+//    - Accumulates file and function counts
+//    - Detects large files and long functions
+//    - Identifies high-complexity functions
+//
+// 2. Anti-Pattern Detection:
+//    - Runs all enabled detectors (parameters, nesting, returns, magic numbers, etc.)
+//    - Requires re-parsing to obtain AST for pattern matching
+//
+// 3. Statistical Analysis:
+//    - Calculates aggregate metrics (averages, percentiles)
+//    - Identifies outliers (largest files, most complex functions)
+//    - Computes overall comment ratio
+//
+// 4. Coverage Analysis (optional):
+//    - Runs go test -cover if enabled
+//    - Detects packages below coverage threshold
+//
+// 5. Dependency Analysis:
+//    - Categorizes imports (stdlib, internal, external)
+//    - Detects circular dependencies
+//    - Identifies packages with too many dependencies
+//
+// The function is fault-tolerant: coverage and dependency failures produce
+// warnings but don't fail the entire analysis.
+//
+// Returns a complete AnalysisResult with all findings, or an error if the
+// core analysis cannot be completed.
 func (ma *MetricsAnalyzer) Analyze(projectPath string, metrics []*parserPkg.FileMetrics) (*AnalysisResult, error) {
 	result := &AnalysisResult{
 		ProjectPath: projectPath,

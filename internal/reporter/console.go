@@ -128,6 +128,18 @@ func (cr *ConsoleReporter) printAggregateMetrics(metrics *analyzer.AggregateMetr
 	table.Render()
 }
 
+// printIssues displays all detected issues with contextual formatting.
+//
+// This function handles different issue types with appropriate visual markers
+// and formatting. Each issue displays:
+// - Severity icon (❌ for errors, ⚠️ for warnings, ℹ️ for info)
+// - File location with optional line number
+// - Function name (if applicable)
+// - Issue-specific metrics (value vs threshold)
+//
+// Issues are expected to be pre-sorted by severity using SortIssuesBySeverity.
+// The function adapts its output based on issue type to provide the most
+// relevant information for each category.
 func (cr *ConsoleReporter) printIssues(issues []*analyzer.Issue) {
 	fmt.Printf("ISSUES FOUND (%d)\n", len(issues))
 	fmt.Println(strings.Repeat("-", 60))
@@ -272,6 +284,20 @@ func (cr *ConsoleReporter) printCoverageReport(coverage *analyzer.CoverageReport
 	}
 }
 
+// printDependencyReport displays package dependency analysis results.
+//
+// This function provides both summary statistics and detailed breakdowns:
+// - Total package count
+// - Packages exceeding import thresholds
+// - Packages with high external dependency counts
+// - Circular dependency warnings with cycle visualization
+//
+// In verbose mode, it also shows per-package details including:
+// - Import categorization (stdlib, internal, external)
+// - List of external dependencies
+//
+// Circular dependencies are highlighted with warning icons and formatted
+// as dependency chains (A -> B -> C -> A) for easy identification.
 func (cr *ConsoleReporter) printDependencyReport(dependencies *analyzer.DependencyReport) {
 	fmt.Println("DEPENDENCIES")
 	fmt.Println(strings.Repeat("-", 60))
@@ -398,6 +424,19 @@ func formatPath(path string) string {
 	return path
 }
 
+// formatIssueType maps internal issue type identifiers to human-readable labels.
+//
+// This function translates issue type codes into display-friendly metric names
+// that describe what value is being measured. For example:
+// - "large_file" -> "Lines" (file size in lines)
+// - "high_complexity" -> "Complexity" (cyclomatic complexity)
+// - "too_many_parameters" -> "Parameters" (parameter count)
+//
+// Some issue types like "magic_number", "duplicate_error_handling", and
+// "circular_dependency" return an empty string because their messages already
+// contain all necessary context and don't need additional value formatting.
+//
+// Returns the appropriate label string, or "Value" as a generic fallback.
 func formatIssueType(issueType string) string {
 	switch issueType {
 	case "large_file":

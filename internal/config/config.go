@@ -5,16 +5,37 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/daniel-munoz/code-review-assistant/internal/constants"
 	"github.com/spf13/viper"
 )
 
-// Config represents the application configuration
+// Config represents the complete application configuration.
+//
+// Configuration can be loaded from multiple sources with the following priority
+// (highest to lowest):
+//   1. CLI flags (set via Merge())
+//   2. Environment variables (prefixed with CRA_)
+//   3. Configuration file (YAML format)
+//   4. Default values (from Default())
+//
+// This layered approach allows flexible configuration for different environments
+// while maintaining sensible defaults.
 type Config struct {
 	Analysis AnalysisConfig `mapstructure:"analysis"`
 	Output   OutputConfig   `mapstructure:"output"`
 }
 
-// AnalysisConfig contains settings for code analysis
+// AnalysisConfig contains all settings that control code analysis behavior.
+//
+// This includes:
+//   - File and function size thresholds
+//   - Complexity thresholds
+//   - Anti-pattern detection settings
+//   - Test coverage configuration
+//   - Dependency analysis settings
+//
+// All threshold values can be overridden via CLI flags, environment variables,
+// or configuration files.
 type AnalysisConfig struct {
 	ExcludePatterns        []string `mapstructure:"exclude_patterns"`
 	LargeFileThreshold     int      `mapstructure:"large_file_threshold"`
@@ -40,43 +61,52 @@ type AnalysisConfig struct {
 	DetectCircularDeps      bool `mapstructure:"detect_circular_deps"`
 }
 
-// OutputConfig contains settings for report output
+// OutputConfig contains settings that control report formatting and output.
+//
+// Format determines the output style (currently only "console" is supported).
+// Verbose enables detailed per-file and per-package reporting.
 type OutputConfig struct {
 	Format  string `mapstructure:"format"`
 	Verbose bool   `mapstructure:"verbose"`
 }
 
-// Default returns a Config with sensible default values
+// Default returns a Config with sensible default values for all settings.
+//
+// These defaults are based on industry best practices and common code quality
+// standards:
+//   - Large file threshold: 500 lines
+//   - Long function threshold: 50 lines
+//   - Cyclomatic complexity threshold: 10
+//   - Minimum comment ratio: 15%
+//   - Test coverage threshold: 50%
+//
+// All anti-pattern detectors are enabled by default. Files matching common
+// patterns (vendor/, testdata/, *_test.go, *.pb.go) are excluded from analysis.
 func Default() *Config {
 	return &Config{
 		Analysis: AnalysisConfig{
-			ExcludePatterns: []string{
-				"vendor/**",
-				"**/*_test.go",
-				"**/testdata/**",
-				"**/*.pb.go",
-			},
-			LargeFileThreshold:    500,
-			LongFunctionThreshold: 50,
-			MinCommentRatio:       0.15,
-			ComplexityThreshold:   10,
+			ExcludePatterns:       constants.DefaultExcludePatterns,
+			LargeFileThreshold:    constants.DefaultLargeFileThreshold,
+			LongFunctionThreshold: constants.DefaultLongFunctionThreshold,
+			MinCommentRatio:       constants.DefaultMinCommentRatio,
+			ComplexityThreshold:   constants.DefaultComplexityThreshold,
 
 			// Anti-pattern detection defaults
-			MaxParameters:         5,
-			MaxNestingDepth:       4,
-			MaxReturnStatements:   3,
-			DetectMagicNumbers:    true,
-			DetectDuplicateErrors: true,
+			MaxParameters:         constants.DefaultMaxParameters,
+			MaxNestingDepth:       constants.DefaultMaxNestingDepth,
+			MaxReturnStatements:   constants.DefaultMaxReturnStatements,
+			DetectMagicNumbers:    constants.DefaultDetectMagicNumbers,
+			DetectDuplicateErrors: constants.DefaultDetectDuplicateErrors,
 
 			// Test coverage defaults
-			EnableCoverage:       true,
-			MinCoverageThreshold: 50.0, // 50%
-			CoverageTimeout:      30,   // 30 seconds per package
+			EnableCoverage:       constants.DefaultEnableCoverage,
+			MinCoverageThreshold: constants.DefaultMinCoverageThreshold,
+			CoverageTimeout:      constants.DefaultCoverageTimeout,
 
 			// Dependency analysis defaults
-			MaxImports:              10,
-			MaxExternalDependencies: 10,
-			DetectCircularDeps:      true,
+			MaxImports:              constants.DefaultMaxImports,
+			MaxExternalDependencies: constants.DefaultMaxExternalDependencies,
+			DetectCircularDeps:      constants.DefaultDetectCircularDeps,
 		},
 		Output: OutputConfig{
 			Format:  "console",
@@ -85,8 +115,25 @@ func Default() *Config {
 	}
 }
 
-// LoadConfig loads configuration from file, environment, and defaults
-// Priority (highest to lowest): CLI flags > Environment variables > Config file > Defaults
+// LoadConfig loads configuration from multiple sources and merges them.
+//
+// Configuration is loaded in the following order (later sources override earlier):
+//   1. Default values (from Default())
+//   2. Configuration file (YAML format)
+//   3. Environment variables (prefixed with CRA_)
+//
+// Configuration File Search:
+// If configPath is provided, only that file is loaded. Otherwise, the loader
+// searches for "config.yaml" in:
+//   - Current directory
+//   - User's home directory (~/.cra/)
+//
+// Environment Variables:
+// All settings can be overridden via environment variables with the CRA_ prefix.
+// For example: CRA_ANALYSIS_COMPLEXITY_THRESHOLD=15
+//
+// Returns the merged configuration or an error if the config file exists but
+// cannot be read. Missing config files are acceptable and will use defaults.
 func LoadConfig(configPath string) (*Config, error) {
 	v := viper.New()
 
@@ -151,7 +198,23 @@ func LoadConfig(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Merge merges CLI flag overrides into the config
+// Merge merges CLI flag overrides into the configuration.
+//
+// This method applies command-line flag overrides with the highest priority,
+// allowing users to override config file and environment settings on a
+// per-invocation basis.
+//
+// The overrides map should contain flag names as keys and their values.
+// Only non-zero/non-empty values are applied to avoid overwriting valid
+// config with flag defaults.
+//
+// Example:
+//
+//	overrides := map[string]interface{}{
+//	    "complexity_threshold": 15,
+//	    "verbose": true,
+//	}
+//	config.Merge(overrides)
 func (c *Config) Merge(overrides map[string]interface{}) {
 	c.mergeAnalysisThresholds(overrides)
 	c.mergeAntiPatternSettings(overrides)

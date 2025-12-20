@@ -143,9 +143,23 @@ func countFields(fields []*ast.Field) int {
 	return count
 }
 
-// calculateComplexity calculates cyclomatic complexity using McCabe's method
-// Complexity = 1 (base) + number of decision points
-// Decision points: if, for, range, case (non-default), select case, &&, ||
+// calculateComplexity calculates cyclomatic complexity using McCabe's method.
+//
+// McCabe's cyclomatic complexity measures the number of linearly independent paths
+// through a function's code. Higher complexity indicates more testing effort required.
+//
+// Formula: Complexity = 1 (base) + number of decision points
+//
+// Decision points counted:
+// - if statements
+// - for loops
+// - range loops
+// - case clauses (except default)
+// - select cases
+// - logical AND (&&) and OR (||) operators
+//
+// Note: else-if is handled as a nested IfStmt, and switch/type-switch are counted
+// through their individual case clauses.
 func calculateComplexity(body *ast.BlockStmt) int {
 	complexity := 1 // Base complexity
 

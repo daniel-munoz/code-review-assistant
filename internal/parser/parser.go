@@ -7,25 +7,60 @@ import (
 	"strings"
 )
 
-// Parser defines the interface for parsing Go source files
+// Parser defines the interface for parsing Go source files and extracting metrics.
+//
+// Implementations use Go's ast, parser, and token packages to analyze source
+// code structure and calculate metrics without executing the code.
 type Parser interface {
-	// ParseFile parses a single Go file and returns its metrics
+	// ParseFile parses a single Go source file and returns its metrics.
+	//
+	// The path must point to a valid .go file. Returns FileMetrics containing:
+	//   - Line counts (total, code, comments, blank)
+	//   - Package information
+	//   - Import list
+	//   - Function/method metrics (size, complexity, signature)
+	//
+	// Returns an error if:
+	//   - path is not a .go file
+	//   - file doesn't exist
+	//   - file contains syntax errors
 	ParseFile(path string) (*FileMetrics, error)
 
-	// ParseDirectory recursively parses all Go files in a directory
-	// Returns metrics for all successfully parsed files and any errors encountered
+	// ParseDirectory recursively parses all Go files in a directory tree.
+	//
+	// Discovers and parses all .go files under the specified path, excluding
+	// files and directories matching the excludePatterns (glob patterns).
+	//
+	// This method is fault-tolerant: parse errors for individual files are
+	// collected but don't stop processing. Returns:
+	//   - metrics: FileMetrics for all successfully parsed files
+	//   - errors: parse errors for files that failed (empty if all succeeded)
+	//
+	// Common exclude patterns: vendor/**, **/*_test.go, **/testdata/**
 	ParseDirectory(path string, excludePatterns []string) ([]*FileMetrics, []error)
 }
 
-// ASTParser implements Parser using Go's AST packages
+// ASTParser implements Parser using Go's AST (Abstract Syntax Tree) packages.
+//
+// This implementation uses go/parser to build an AST and go/ast to traverse it,
+// extracting structural metrics without requiring the code to compile or run.
 type ASTParser struct{}
 
-// NewParser creates a new Parser instance
+// NewParser creates a new Parser instance using AST-based parsing.
+//
+// Returns an ASTParser that can parse individual files or entire directory trees.
 func NewParser() Parser {
 	return &ASTParser{}
 }
 
-// ParseFile parses a single Go file and extracts metrics
+// ParseFile parses a single Go file and extracts comprehensive metrics.
+//
+// Uses go/parser.ParseFile to build an AST, then walks the tree to extract:
+//   - File-level metrics (line counts, imports, package name)
+//   - Function-level metrics (size, complexity, parameters, returns)
+//
+// Returns an error if the file doesn't exist, isn't a .go file, or contains
+// syntax errors that prevent parsing.
 func (p *ASTParser) ParseFile(path string) (*FileMetrics, error) {
 	// Verify file exists and is a .go file
 	if !strings.HasSuffix(path, ".go") {
@@ -40,7 +75,20 @@ func (p *ASTParser) ParseFile(path string) (*FileMetrics, error) {
 	return parseGoFile(path)
 }
 
-// ParseDirectory recursively finds and parses all Go files in a directory
+// ParseDirectory recursively discovers and parses all Go files in a directory.
+//
+// Uses filepath.Walk to traverse the directory tree, parsing all .go files
+// that don't match the exclude patterns. Patterns support glob syntax:
+//   - vendor/** - exclude vendor directory and subdirectories
+//   - **/*_test.go - exclude all test files
+//   - **/testdata/** - exclude testdata directories
+//
+// This method is designed to be fault-tolerant:
+//   - Parse errors for individual files are collected but don't stop processing
+//   - Directory access errors are logged and skipped
+//   - Returns metrics for all successfully parsed files
+//
+// The excludePatterns are matched against paths relative to rootPath.
 func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string) ([]*FileMetrics, []error) {
 	var allMetrics []*FileMetrics
 	var errors []error
