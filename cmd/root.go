@@ -38,6 +38,11 @@ func GetConfigFile() string {
 	return cfgFile
 }
 
+// SetConfigFile sets the config file path (primarily for testing)
+func SetConfigFile(path string) {
+	cfgFile = path
+}
+
 // IsVerbose returns whether verbose mode is enabled
 func IsVerbose() bool {
 	return verbose

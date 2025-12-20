@@ -2,7 +2,6 @@ package dependencies
 
 import (
 	"fmt"
-	"go/build"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,15 +103,23 @@ func (a *Analyzer) categorizeImport(importPath string) string {
 }
 
 // isStdlib checks if a package is in the Go standard library
+// Uses a simple heuristic to avoid expensive build.Import calls
 func isStdlib(importPath string) bool {
-	// Standard library packages are in the default GOROOT
-	pkg, err := build.Default.Import(importPath, "", build.FindOnly)
-	if err != nil {
+	// Special case for vendor paths
+	if strings.Contains(importPath, "/vendor/") {
 		return false
 	}
 
-	// Check if package is in GOROOT
-	return pkg.Goroot
+	// Standard library packages don't have a hostname/domain component
+	// (they don't contain a dot in the first path element)
+	// Exception: golang.org/x/* packages are also considered stdlib
+	if strings.HasPrefix(importPath, "golang.org/x/") {
+		return true
+	}
+
+	// If the import path contains a dot, it's likely external (e.g., github.com/...)
+	firstElement := strings.Split(importPath, "/")[0]
+	return !strings.Contains(firstElement, ".")
 }
 
 // getModuleName reads the module name from go.mod

@@ -1,0 +1,23 @@
+analysis:
+  exclude_patterns:
+    - "vendor/**"
+    - "**/*_test.go"
+  large_file_threshold: 500
+  long_function_threshold: 50
+  min_comment_ratio: 0.15
+  complexity_threshold: 10
+  max_parameters: 5
+  max_nesting_depth: 4
+  max_return_statements: 3
+  detect_magic_numbers: true
+  detect_duplicate_errors: true
+  enable_coverage: false  # Disable coverage for tests to avoid hanging
+  min_coverage_threshold: 50.0
+  coverage_timeout_seconds: 1  # Very short timeout for tests
+  max_imports: 10
+  max_external_dependencies: 10
+  detect_circular_deps: false  # Disable circular deps for tests
+
+output:
+  format: "console"
+  verbose: false
