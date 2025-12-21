@@ -17,12 +17,20 @@ var (
 	longFunctionThreshold   int
 	complexityThreshold     int
 	outputFormat            string
+	outputFile              string  // Phase 3: Output file path
+	jsonPretty              bool    // Phase 3: Pretty-print JSON
 	enableCoverage          bool
 	minCoverageThreshold    float64
 	coverageTimeout         int
 	maxImports              int
 	maxExternalDependencies int
 	detectCircularDeps      bool
+
+	// Phase 3: Storage and comparison flags
+	saveReport      bool
+	compareReport   bool
+	storageBackend  string
+	storagePath     string
 )
 
 // analyzeCmd represents the analyze command
@@ -52,13 +60,21 @@ func init() {
 	analyzeCmd.Flags().IntVar(&largeFileThreshold, "large-file-threshold", 0, "override large file threshold (lines)")
 	analyzeCmd.Flags().IntVar(&longFunctionThreshold, "long-function-threshold", 0, "override long function threshold (lines)")
 	analyzeCmd.Flags().IntVar(&complexityThreshold, "complexity-threshold", 0, "override cyclomatic complexity threshold")
-	analyzeCmd.Flags().StringVarP(&outputFormat, "format", "f", "", "output format (console, json, markdown)")
+	analyzeCmd.Flags().StringVarP(&outputFormat, "format", "f", "", "output format (console, markdown, json)")
+	analyzeCmd.Flags().StringVarP(&outputFile, "output-file", "o", "", "write output to file (default: stdout)")
+	analyzeCmd.Flags().BoolVar(&jsonPretty, "json-pretty", true, "pretty-print JSON output")
 	analyzeCmd.Flags().BoolVar(&enableCoverage, "enable-coverage", true, "enable test coverage analysis")
 	analyzeCmd.Flags().Float64Var(&minCoverageThreshold, "min-coverage-threshold", 0, "minimum coverage threshold percentage (0-100)")
 	analyzeCmd.Flags().IntVar(&coverageTimeout, "coverage-timeout", 0, "timeout for test execution per package (seconds)")
 	analyzeCmd.Flags().IntVar(&maxImports, "max-imports", 0, "maximum imports per package before flagging")
 	analyzeCmd.Flags().IntVar(&maxExternalDependencies, "max-external-dependencies", 0, "maximum external dependencies per package")
 	analyzeCmd.Flags().BoolVar(&detectCircularDeps, "detect-circular-deps", true, "detect circular dependencies between packages")
+
+	// Phase 3: Storage and comparison flags
+	analyzeCmd.Flags().BoolVar(&saveReport, "save-report", false, "save report to storage for historical tracking")
+	analyzeCmd.Flags().BoolVar(&compareReport, "compare", false, "compare with previous report from storage")
+	analyzeCmd.Flags().StringVar(&storageBackend, "storage-backend", "file", "storage backend: file or sqlite")
+	analyzeCmd.Flags().StringVar(&storagePath, "storage-path", "", "custom storage path (default: ~/.cra)")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
@@ -114,6 +130,7 @@ func buildOverridesMap(cmd *cobra.Command) map[string]interface{} {
 	addCoverageOverrides(overrides, cmd)
 	addDependencyOverrides(overrides, cmd)
 	addOutputOverrides(overrides)
+	addStorageOverrides(overrides, cmd)
 
 	return overrides
 }
@@ -165,8 +182,36 @@ func addOutputOverrides(overrides map[string]interface{}) {
 	if outputFormat != "" {
 		overrides["format"] = outputFormat
 	}
+	if outputFile != "" {
+		overrides["output_file"] = outputFile
+	}
+	// Only add json_pretty if explicitly set by user
+	if outputFormat == "json" {
+		overrides["json_pretty"] = jsonPretty
+	}
 	if IsVerbose() {
 		overrides["verbose"] = true
+	}
+}
+
+// addStorageOverrides adds Phase 3 storage and comparison setting overrides
+func addStorageOverrides(overrides map[string]interface{}, cmd *cobra.Command) {
+	// Enable storage if save-report or compare flags are set
+	if cmd.Flags().Changed("save-report") || cmd.Flags().Changed("compare") {
+		overrides["storage_enabled"] = saveReport || compareReport
+	}
+
+	// Enable comparison if --compare flag is set
+	if cmd.Flags().Changed("compare") {
+		overrides["comparison_enabled"] = compareReport
+	}
+
+	if storageBackend != "" {
+		overrides["storage_backend"] = storageBackend
+	}
+
+	if storagePath != "" {
+		overrides["storage_path"] = storagePath
 	}
 }
 
@@ -176,6 +221,7 @@ func executeAnalysis(cfg *config.Config, targetPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create orchestrator: %w", err)
 	}
+	defer orch.Close() // Phase 3: Close storage resources
 
 	if err := orch.Run(targetPath); err != nil {
 		return fmt.Errorf("analysis failed: %w", err)

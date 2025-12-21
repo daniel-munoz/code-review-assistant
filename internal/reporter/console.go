@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
+	"github.com/daniel-munoz/code-review-assistant/internal/comparison"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/olekukonko/tablewriter"
 )
@@ -25,7 +26,7 @@ func NewConsoleReporter(cfg *config.OutputConfig) *ConsoleReporter {
 }
 
 // Report outputs the analysis results to the console
-func (cr *ConsoleReporter) Report(result *analyzer.AnalysisResult) error {
+func (cr *ConsoleReporter) Report(result *analyzer.AnalysisResult, comp *comparison.ComparisonResult) error {
 	// Sort issues by severity
 	analyzer.SortIssuesBySeverity(result.Issues)
 
@@ -36,6 +37,12 @@ func (cr *ConsoleReporter) Report(result *analyzer.AnalysisResult) error {
 	fmt.Printf("Project: %s\n", result.ProjectPath)
 	fmt.Printf("Analyzed: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Println()
+
+	// Phase 3: Comparison Summary (if available)
+	if comp != nil {
+		cr.printComparisonSummary(comp)
+		fmt.Println()
+	}
 
 	// Summary
 	cr.printSummary(result)
@@ -72,6 +79,12 @@ func (cr *ConsoleReporter) Report(result *analyzer.AnalysisResult) error {
 	// Dependency Report
 	if result.Dependencies != nil {
 		cr.printDependencyReport(result.Dependencies)
+		fmt.Println()
+	}
+
+	// Phase 3: Detailed Comparison (if available and verbose)
+	if comp != nil && cr.config.Verbose {
+		cr.printDetailedComparison(comp)
 		fmt.Println()
 	}
 
@@ -477,4 +490,154 @@ func sumCommentLines(result *analyzer.AnalysisResult) int {
 		total += file.Metrics.CommentLines
 	}
 	return total
+}
+
+// Phase 3: Comparison reporting methods
+
+// printComparisonSummary prints a summary of changes compared to the previous report
+func (cr *ConsoleReporter) printComparisonSummary(comp *comparison.ComparisonResult) {
+	fmt.Println("COMPARISON WITH PREVIOUS REPORT")
+	fmt.Println(strings.Repeat("-", 60))
+	fmt.Printf("Previous: %s\n", comp.PreviousTimestamp.Format("2006-01-02 15:04:05"))
+	fmt.Println()
+
+	// Trends summary
+	fmt.Printf("Complexity:    %s  %s\n", comp.Trends.Complexity.Icon(), comp.Trends.Complexity.String())
+	fmt.Printf("Coverage:      %s  %s\n", comp.Trends.Coverage.Icon(), comp.Trends.Coverage.String())
+	fmt.Printf("Issue Count:   %s  %s\n", comp.Trends.IssueCount.Icon(), comp.Trends.IssueCount.String())
+	fmt.Println()
+
+	// Key metrics table
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Metric", "Previous", "Current", "Change"})
+	table.SetBorder(false)
+
+	table.Append([]string{
+		"Files",
+		formatNumber(comp.Deltas.TotalFiles.Previous),
+		formatNumber(comp.Deltas.TotalFiles.Current),
+		formatDelta(comp.Deltas.TotalFiles.Change, comp.Deltas.TotalFiles.Percent),
+	})
+	table.Append([]string{
+		"Lines",
+		formatNumber(comp.Deltas.TotalLines.Previous),
+		formatNumber(comp.Deltas.TotalLines.Current),
+		formatDelta(comp.Deltas.TotalLines.Change, comp.Deltas.TotalLines.Percent),
+	})
+	table.Append([]string{
+		"Functions",
+		formatNumber(comp.Deltas.TotalFunctions.Previous),
+		formatNumber(comp.Deltas.TotalFunctions.Current),
+		formatDelta(comp.Deltas.TotalFunctions.Change, comp.Deltas.TotalFunctions.Percent),
+	})
+	table.Append([]string{
+		"Avg Complexity",
+		fmt.Sprintf("%.2f", comp.Deltas.AvgComplexity.Previous),
+		fmt.Sprintf("%.2f", comp.Deltas.AvgComplexity.Current),
+		formatFloatDelta(comp.Deltas.AvgComplexity.Change, comp.Deltas.AvgComplexity.Percent),
+	})
+	table.Append([]string{
+		"Avg Coverage",
+		fmt.Sprintf("%.1f%%", comp.Deltas.AvgCoverage.Previous),
+		fmt.Sprintf("%.1f%%", comp.Deltas.AvgCoverage.Current),
+		formatFloatDelta(comp.Deltas.AvgCoverage.Change, comp.Deltas.AvgCoverage.Percent),
+	})
+	table.Append([]string{
+		"Issues",
+		formatNumber(comp.Deltas.IssueCount.Previous),
+		formatNumber(comp.Deltas.IssueCount.Current),
+		formatDelta(comp.Deltas.IssueCount.Change, comp.Deltas.IssueCount.Percent),
+	})
+
+	table.Render()
+}
+
+// printDetailedComparison prints detailed information about new and fixed issues
+func (cr *ConsoleReporter) printDetailedComparison(comp *comparison.ComparisonResult) {
+	// New Issues
+	if len(comp.NewIssues) > 0 {
+		fmt.Println("NEW ISSUES")
+		fmt.Println(strings.Repeat("-", 60))
+		fmt.Printf("Found %d new issue(s) since last analysis:\n\n", len(comp.NewIssues))
+
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Severity", "Type", "File", "Line", "Function"})
+		table.SetBorder(false)
+
+		for _, issue := range comp.NewIssues {
+			table.Append([]string{
+				formatSeverity(issue.Severity),
+				issue.Type,
+				filepath.Base(issue.File),
+				fmt.Sprintf("%d", issue.Line),
+				truncateString(issue.Function, 30),
+			})
+		}
+
+		table.Render()
+		fmt.Println()
+	}
+
+	// Fixed Issues
+	if len(comp.FixedIssues) > 0 {
+		fmt.Println("FIXED ISSUES")
+		fmt.Println(strings.Repeat("-", 60))
+		fmt.Printf("Fixed %d issue(s) since last analysis:\n\n", len(comp.FixedIssues))
+
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Severity", "Type", "File", "Line", "Function"})
+		table.SetBorder(false)
+
+		for _, issue := range comp.FixedIssues {
+			table.Append([]string{
+				formatSeverity(issue.Severity),
+				issue.Type,
+				filepath.Base(issue.File),
+				fmt.Sprintf("%d", issue.Line),
+				truncateString(issue.Function, 30),
+			})
+		}
+
+		table.Render()
+	}
+}
+
+// formatDelta formats an integer delta with sign and percentage
+func formatDelta(change int, percent float64) string {
+	sign := ""
+	if change > 0 {
+		sign = "+"
+	}
+	return fmt.Sprintf("%s%d (%s%.1f%%)", sign, change, sign, percent)
+}
+
+// formatFloatDelta formats a float delta with sign and percentage
+func formatFloatDelta(change float64, percent float64) string {
+	sign := ""
+	if change > 0 {
+		sign = "+"
+	}
+	return fmt.Sprintf("%s%.2f (%s%.1f%%)", sign, change, sign, percent)
+}
+
+// formatSeverity returns a colored/formatted severity string
+func formatSeverity(severity string) string {
+	switch severity {
+	case "error":
+		return "ERROR"
+	case "warning":
+		return "WARNING"
+	case "info":
+		return "INFO"
+	default:
+		return strings.ToUpper(severity)
+	}
+}
+
+// truncateString truncates a string to the specified length
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }

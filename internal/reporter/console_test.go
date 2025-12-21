@@ -103,7 +103,7 @@ func TestConsoleReporter_Report(t *testing.T) {
 			Issues: []*analyzer.Issue{},
 		}
 
-		err := reporter.Report(result)
+		err := reporter.Report(result, nil)
 
 		assert.NoError(t, err, "should report without error")
 	})
@@ -149,7 +149,7 @@ func TestConsoleReporter_Report(t *testing.T) {
 			},
 		}
 
-		err := reporter.Report(result)
+		err := reporter.Report(result, nil)
 
 		assert.NoError(t, err, "should report with issues without error")
 	})
@@ -184,7 +184,7 @@ func TestConsoleReporter_Report(t *testing.T) {
 			},
 		}
 
-		err := reporter.Report(result)
+		err := reporter.Report(result, nil)
 
 		assert.NoError(t, err, "should report with coverage data without error")
 	})
@@ -226,7 +226,7 @@ func TestConsoleReporter_Report(t *testing.T) {
 			},
 		}
 
-		err := reporter.Report(result)
+		err := reporter.Report(result, nil)
 
 		assert.NoError(t, err, "should report with dependency data without error")
 	})
@@ -259,7 +259,7 @@ func TestConsoleReporter_Report(t *testing.T) {
 			},
 		}
 
-		err := reporter.Report(result)
+		err := reporter.Report(result, nil)
 
 		assert.NoError(t, err, "should report in verbose mode without error")
 	})
@@ -303,7 +303,7 @@ func TestConsoleReporter_ReportFormat(t *testing.T) {
 			},
 		}
 
-		err := reporter.Report(result)
+		err := reporter.Report(result, nil)
 
 		assert.NoError(t, err, "should report all sections without error")
 	})

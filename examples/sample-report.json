@@ -1,0 +1,348 @@
+{
+  "timestamp": "2025-12-20T16:29:42-08:00",
+  "version": "0.3.0",
+  "result": {
+    "project_path": "internal/comparison",
+    "total_files": 1,
+    "total_lines": 333,
+    "total_code_lines": 202,
+    "total_functions": 10,
+    "metrics": {
+      "average_function_length": 19.6,
+      "function_length_p95": 61,
+      "comment_ratio": 0.26426426426426425,
+      "largest_files": [
+        {
+          "path": "internal/comparison/comparison.go",
+          "lines": 333
+        }
+      ],
+      "average_complexity": 3.4,
+      "complexity_p95": 6,
+      "most_complex_functions": [
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "*Comparator.detectTrend",
+          "complexity": 6,
+          "lines": 25
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "*Comparator.categorizeIssues",
+          "complexity": 6,
+          "lines": 30
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "*Comparator.calculateDeltas",
+          "complexity": 5,
+          "lines": 61
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "TrendDirection.String",
+          "complexity": 4,
+          "lines": 12
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "TrendDirection.Icon",
+          "complexity": 4,
+          "lines": 12
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "*Comparator.percentChange",
+          "complexity": 3,
+          "lines": 9
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "NewComparator",
+          "complexity": 2,
+          "lines": 8
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "*Comparator.Compare",
+          "complexity": 2,
+          "lines": 22
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "*Comparator.detectTrends",
+          "complexity": 1,
+          "lines": 14
+        },
+        {
+          "file": "internal/comparison/comparison.go",
+          "function": "*Comparator.issueKey",
+          "complexity": 1,
+          "lines": 3
+        }
+      ]
+    },
+    "files": [
+      {
+        "path": "internal/comparison/comparison.go",
+        "metrics": {
+          "FilePath": "internal/comparison/comparison.go",
+          "PackageName": "comparison",
+          "TotalLines": 333,
+          "CodeLines": 202,
+          "CommentLines": 88,
+          "BlankLines": 43,
+          "Functions": [
+            {
+              "Name": "NewComparator",
+              "ReceiverType": "",
+              "StartLine": 35,
+              "EndLine": 42,
+              "Lines": 8,
+              "Parameters": 1,
+              "ReturnValues": 1,
+              "Complexity": 2
+            },
+            {
+              "Name": "Compare",
+              "ReceiverType": "*Comparator",
+              "StartLine": 63,
+              "EndLine": 84,
+              "Lines": 22,
+              "Parameters": 3,
+              "ReturnValues": 1,
+              "Complexity": 2
+            },
+            {
+              "Name": "calculateDeltas",
+              "ReceiverType": "*Comparator",
+              "StartLine": 87,
+              "EndLine": 147,
+              "Lines": 61,
+              "Parameters": 2,
+              "ReturnValues": 1,
+              "Complexity": 5
+            },
+            {
+              "Name": "detectTrends",
+              "ReceiverType": "*Comparator",
+              "StartLine": 150,
+              "EndLine": 163,
+              "Lines": 14,
+              "Parameters": 1,
+              "ReturnValues": 1,
+              "Complexity": 1
+            },
+            {
+              "Name": "detectTrend",
+              "ReceiverType": "*Comparator",
+              "StartLine": 175,
+              "EndLine": 199,
+              "Lines": 25,
+              "Parameters": 2,
+              "ReturnValues": 1,
+              "Complexity": 6
+            },
+            {
+              "Name": "categorizeIssues",
+              "ReceiverType": "*Comparator",
+              "StartLine": 206,
+              "EndLine": 235,
+              "Lines": 30,
+              "Parameters": 2,
+              "ReturnValues": 2,
+              "Complexity": 6
+            },
+            {
+              "Name": "issueKey",
+              "ReceiverType": "*Comparator",
+              "StartLine": 238,
+              "EndLine": 240,
+              "Lines": 3,
+              "Parameters": 1,
+              "ReturnValues": 1,
+              "Complexity": 1
+            },
+            {
+              "Name": "percentChange",
+              "ReceiverType": "*Comparator",
+              "StartLine": 243,
+              "EndLine": 251,
+              "Lines": 9,
+              "Parameters": 2,
+              "ReturnValues": 1,
+              "Complexity": 3
+            },
+            {
+              "Name": "String",
+              "ReceiverType": "TrendDirection",
+              "StartLine": 307,
+              "EndLine": 318,
+              "Lines": 12,
+              "Parameters": 0,
+              "ReturnValues": 1,
+              "Complexity": 4
+            },
+            {
+              "Name": "Icon",
+              "ReceiverType": "TrendDirection",
+              "StartLine": 321,
+              "EndLine": 332,
+              "Lines": 12,
+              "Parameters": 0,
+              "ReturnValues": 1,
+              "Complexity": 4
+            }
+          ],
+          "Imports": [
+            "time",
+            "github.com/daniel-munoz/code-review-assistant/internal/analyzer"
+          ]
+        },
+        "large_file": false
+      }
+    ],
+    "issues": [
+      {
+        "severity": "warning",
+        "type": "long_function",
+        "file": "internal/comparison/comparison.go",
+        "line": 87,
+        "function": "*Comparator.calculateDeltas",
+        "message": "Function exceeds length threshold",
+        "value": 61,
+        "threshold": 50
+      },
+      {
+        "severity": "info",
+        "type": "magic_number",
+        "file": "internal/comparison/comparison.go",
+        "line": 37,
+        "function": "NewComparator",
+        "message": "Magic number should be replaced with a named constant: 5.0",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "severity": "info",
+        "type": "magic_number",
+        "file": "internal/comparison/comparison.go",
+        "line": 120,
+        "function": "*Comparator.calculateDeltas",
+        "message": "Magic number should be replaced with a named constant: 100",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "severity": "info",
+        "type": "magic_number",
+        "file": "internal/comparison/comparison.go",
+        "line": 121,
+        "function": "*Comparator.calculateDeltas",
+        "message": "Magic number should be replaced with a named constant: 100",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "severity": "info",
+        "type": "magic_number",
+        "file": "internal/comparison/comparison.go",
+        "line": 133,
+        "function": "*Comparator.calculateDeltas",
+        "message": "Magic number should be replaced with a named constant: 100",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "severity": "info",
+        "type": "magic_number",
+        "file": "internal/comparison/comparison.go",
+        "line": 134,
+        "function": "*Comparator.calculateDeltas",
+        "message": "Magic number should be replaced with a named constant: 100",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "severity": "info",
+        "type": "too_many_returns",
+        "file": "internal/comparison/comparison.go",
+        "line": 175,
+        "function": "*Comparator.detectTrend",
+        "message": "Function has 5 return statements",
+        "value": 5,
+        "threshold": 3
+      },
+      {
+        "severity": "info",
+        "type": "magic_number",
+        "file": "internal/comparison/comparison.go",
+        "line": 248,
+        "function": "*Comparator.percentChange",
+        "message": "Magic number should be replaced with a named constant: 100.0",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "severity": "info",
+        "type": "magic_number",
+        "file": "internal/comparison/comparison.go",
+        "line": 250,
+        "function": "*Comparator.percentChange",
+        "message": "Magic number should be replaced with a named constant: 100.0",
+        "value": 0,
+        "threshold": 0
+      },
+      {
+        "severity": "info",
+        "type": "too_many_returns",
+        "file": "internal/comparison/comparison.go",
+        "line": 307,
+        "function": "TrendDirection.String",
+        "message": "Function has 4 return statements",
+        "value": 4,
+        "threshold": 3
+      },
+      {
+        "severity": "info",
+        "type": "too_many_returns",
+        "file": "internal/comparison/comparison.go",
+        "line": 321,
+        "function": "TrendDirection.Icon",
+        "message": "Function has 4 return statements",
+        "value": 4,
+        "threshold": 3
+      }
+    ],
+    "coverage": {
+      "packages": [
+        {
+          "package_path": "github.com/daniel-munoz/code-review-assistant/internal/comparison",
+          "coverage": 100,
+          "skipped": false
+        }
+      ],
+      "average_coverage": 100,
+      "low_coverage_count": 0
+    },
+    "dependencies": {
+      "packages": [
+        {
+          "package_name": "comparison",
+          "stdlib_imports": [
+            "time"
+          ],
+          "internal_imports": [
+            "github.com/daniel-munoz/code-review-assistant/internal/analyzer"
+          ],
+          "external_imports": null,
+          "total_imports": 2,
+          "external_import_count": 0
+        }
+      ],
+      "total_packages": 1,
+      "high_import_count": 0,
+      "high_external_count": 0
+    }
+  }
+}

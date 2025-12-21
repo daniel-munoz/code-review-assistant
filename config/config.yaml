@@ -34,5 +34,21 @@ analysis:
   detect_circular_deps: true     # Detect circular dependencies between packages
 
 output:
-  format: "console"               # Output format: console (json, markdown in future phases)
+  format: "console"               # Output format: console, markdown, json
   verbose: false                  # Show detailed per-file metrics
+  output_file: ""                 # Phase 3: Write to file instead of stdout (empty = stdout)
+  json_pretty: true               # Phase 3: Pretty-print JSON output
+
+# Phase 3: Storage configuration
+storage:
+  enabled: false                  # Enable persistent storage for historical tracking
+  backend: "file"                 # Storage backend: file (JSON) or sqlite
+  path: ""                        # Custom storage path (empty = default: ~/.cra)
+  auto_save: false                # Automatically save reports after analysis
+  project_mode: false             # Use ./.cra instead of ~/.cra for project-specific storage
+
+# Phase 3: Comparison configuration
+comparison:
+  enabled: false                  # Enable comparison with previous reports
+  auto_compare: false             # Automatically compare with latest report
+  stable_threshold: 5.0           # Percentage change threshold for "stable" trend (default: 5%)

@@ -1,48 +1,79 @@
 # Code Review Assistant
 
-A CLI tool that analyzes Go codebases to provide actionable insights about code quality, complexity, maintainability, test coverage, and dependencies.
+A comprehensive CLI tool that analyzes Go codebases to provide actionable insights about code quality, complexity, maintainability, test coverage, and dependencies. Track your code quality metrics over time with historical comparison and multiple output formats.
 
 ## Features
 
-### Phase 1: Basic Metrics
+### 📊 Code Metrics & Analysis
 
-- **Basic Metrics Collection**: LOC, code/comment/blank line counts, function counts
-- **Code Quality Detection**: Large files, long functions, function length percentiles
-- **Flexible Configuration**: YAML config, CLI overrides, pattern exclusions
-- **Console Reporting**: Summary tables, aggregate metrics, issue warnings, largest files
+- **Lines of Code Analysis**: Detailed breakdown of total, code, comment, and blank lines
+- **Function Metrics**: Count, average length, and 95th percentile tracking
+- **Cyclomatic Complexity**: McCabe's complexity calculation with configurable thresholds
+- **Large File Detection**: Identify files exceeding size thresholds
+- **Long Function Detection**: Flag functions that may need refactoring
 
-### Phase 2: Advanced Analysis (✅ Complete)
+### 🔍 Anti-Pattern Detection
 
-#### 1. Enhanced Cyclomatic Complexity
-- McCabe's complexity calculation for all functions
-- Average complexity and 95th percentile tracking
-- Top 10 most complex functions reporting
-- Configurable complexity threshold (default: 10)
-- High complexity warnings with function location
+Modular detector system identifies common code smells:
+- **Too Many Parameters**: Flags functions with excessive parameters (default: >5)
+- **Deep Nesting**: Detects excessive nesting depth (default: >4 levels)
+- **Too Many Returns**: Identifies functions with multiple return statements (default: >3)
+- **Magic Numbers**: Detects numeric literals that should be named constants
+- **Duplicate Error Handling**: Identifies repetitive `if err != nil` patterns
 
-#### 2. Anti-Pattern Detection
-- **Too Many Parameters**: Flags functions with >5 parameters (configurable)
-- **Deep Nesting**: Detects nesting depth >4 levels (configurable)
-- **Too Many Returns**: Flags functions with >3 return statements (configurable)
-- **Magic Numbers**: Detects numeric literals (excludes 0, 1, -1)
-- **Duplicate Error Handling**: Identifies repetitive `if err != nil` patterns (>5)
-- Modular detector system with registry pattern for easy extension
+### ✅ Test Coverage Integration
 
-#### 3. Test Coverage Integration
 - Automatic `go test -cover` execution for all packages
 - Coverage percentage parsing and reporting
-- Low coverage warnings (default threshold: 50%)
 - Per-package coverage breakdown in verbose mode
-- Configurable timeout for test execution
+- Low coverage warnings with configurable thresholds
 - Graceful handling of packages without tests
+- Configurable timeout for test execution
 
-#### 4. Dependency Analysis
+### 🔗 Dependency Analysis
+
 - Import categorization (stdlib, internal, external)
 - Per-package dependency breakdown
 - Circular dependency detection using DFS algorithm
-- Too many imports warnings (default: 10)
-- Too many external dependencies warnings (default: 10)
+- Too many imports warnings
+- Too many external dependencies warnings
 - Verbose mode shows full dependency lists
+
+### 📄 Multiple Output Formats
+
+- **Console**: Rich terminal output with tables and color-coded severity (default)
+- **Markdown**: GitHub-flavored Markdown with tables and collapsible sections
+- **JSON**: Structured JSON output for programmatic consumption and CI/CD integration
+- File output capability for all formats
+- Pretty-print option for JSON
+
+### 💾 Persistent Storage & Historical Tracking
+
+- **File Storage**: JSON-based storage in `~/.cra/history/` (default)
+- **SQLite Storage**: Structured database storage with efficient querying
+- Project isolation using path hashing
+- Automatic Git metadata extraction (commit hash, branch)
+- Configurable storage backend and path
+- Project-specific or global storage modes
+
+### 📈 Historical Comparison
+
+- Compare current analysis with previous reports
+- Metric deltas with percentage changes
+- Trend detection (improving/worsening/stable)
+- New and fixed issues tracking
+- Configurable stable threshold (default: 5%)
+- Visual indicators for trends (✅ improving, 📉 worsening, ➡️ stable)
+- Detailed comparison reports in all output formats
+
+### ⚙️ Flexible Configuration
+
+- YAML configuration file support
+- Environment variable overrides (CRA_ prefix)
+- CLI flag overrides
+- Exclude patterns with glob support
+- Per-project or global configuration
+- All thresholds and settings configurable
 
 ## Installation
 
@@ -54,7 +85,7 @@ Or build from source:
 
 ```bash
 git clone https://github.com/daniel-munoz/code-review-assistant.git
-cd code-review-assistant/phase1
+cd code-review-assistant
 go build -o code-review-assistant
 ```
 
@@ -72,10 +103,16 @@ Analyze a specific project:
 code-review-assistant analyze /path/to/your/go/project
 ```
 
-Use a custom configuration:
+Generate a Markdown report:
 
 ```bash
-code-review-assistant analyze . --config custom-config.yaml
+code-review-assistant analyze . --format markdown --output-file report.md
+```
+
+Save and compare with previous analysis:
+
+```bash
+code-review-assistant analyze . --save-report --compare
 ```
 
 ## Configuration
@@ -92,41 +129,54 @@ analysis:
     - "**/*.pb.go"        # Generated protobuf files
     - "**/*_gen.go"       # Generated Go files
 
-  # Phase 1: Basic thresholds
+  # Code quality thresholds
   large_file_threshold: 500      # Lines
   long_function_threshold: 50    # Lines
   min_comment_ratio: 0.15        # 15%
-
-  # Phase 2.1: Complexity
   complexity_threshold: 10       # Cyclomatic complexity
 
-  # Phase 2.2: Anti-pattern detection
+  # Anti-pattern detection
   max_parameters: 5              # Maximum function parameters
   max_nesting_depth: 4           # Maximum nesting depth
   max_return_statements: 3       # Maximum return statements per function
   detect_magic_numbers: true     # Detect numeric literals
   detect_duplicate_errors: true  # Detect repetitive error handling
 
-  # Phase 2.3: Test coverage
+  # Test coverage
   enable_coverage: true          # Run go test -cover
   min_coverage_threshold: 50.0   # Minimum coverage percentage (0-100)
   coverage_timeout_seconds: 30   # Timeout for test execution per package
 
-  # Phase 2.4: Dependency analysis
+  # Dependency analysis
   max_imports: 10                # Maximum imports per package
   max_external_dependencies: 10  # Maximum external dependencies per package
   detect_circular_deps: true     # Detect circular dependencies
 
 output:
-  format: "console"
-  verbose: false
+  format: "console"              # Output format: console, markdown, json
+  verbose: false                 # Show detailed per-file metrics
+  output_file: ""                # Write to file instead of stdout
+  json_pretty: true              # Pretty-print JSON output
+
+# Storage configuration
+storage:
+  enabled: false                 # Enable persistent storage
+  backend: "file"                # Storage backend: file or sqlite
+  path: ""                       # Custom path (default: ~/.cra)
+  auto_save: false               # Automatically save after analysis
+  project_mode: false            # Use ./.cra instead of ~/.cra
+
+# Comparison configuration
+comparison:
+  enabled: false                 # Enable historical comparison
+  auto_compare: false            # Auto-compare with latest report
+  stable_threshold: 5.0          # % change for "stable" (default: 5.0)
 ```
 
 ## CLI Reference
 
-### Commands
+### analyze
 
-#### `analyze`
 Analyze a Go codebase and generate a report.
 
 **Usage:**
@@ -134,81 +184,172 @@ Analyze a Go codebase and generate a report.
 code-review-assistant analyze [path] [flags]
 ```
 
-**Flags:**
-
-*General:*
-- `--config, -c` - Path to config file (default: ./config.yaml)
-- `--format, -f` - Output format: console (default: console)
+**General Flags:**
+- `--config, -c` - Path to config file (default: ./config.yaml or ~/.cra/config.yaml)
 - `--verbose, -v` - Show verbose output with per-file and per-package details
 - `--exclude` - Additional exclude patterns (can be repeated)
 
-*Phase 1 Thresholds:*
-- `--large-file-threshold` - Override large file threshold (default: 500)
-- `--long-function-threshold` - Override long function threshold (default: 50)
-
-*Phase 2 Thresholds:*
+**Analysis Thresholds:**
+- `--large-file-threshold` - Override large file threshold in lines (default: 500)
+- `--long-function-threshold` - Override long function threshold in lines (default: 50)
 - `--complexity-threshold` - Override cyclomatic complexity threshold (default: 10)
+- `--max-parameters` - Maximum function parameters before flagging (default: 5)
+- `--max-nesting-depth` - Maximum nesting depth before flagging (default: 4)
+- `--max-return-statements` - Maximum return statements per function (default: 3)
+
+**Coverage Flags:**
 - `--enable-coverage` - Enable/disable test coverage analysis (default: true)
 - `--min-coverage-threshold` - Minimum coverage percentage 0-100 (default: 50)
 - `--coverage-timeout` - Test execution timeout per package in seconds (default: 30)
+
+**Dependency Flags:**
 - `--max-imports` - Maximum imports per package (default: 10)
 - `--max-external-dependencies` - Maximum external dependencies per package (default: 10)
 - `--detect-circular-deps` - Enable/disable circular dependency detection (default: true)
 
-**Examples:**
+**Output & Storage Flags:**
+- `--format, -f` - Output format: console, markdown, json (default: console)
+- `--output-file, -o` - Write output to file instead of stdout
+- `--json-pretty` - Pretty-print JSON output (default: true)
+- `--save-report` - Save report to storage for historical tracking
+- `--compare` - Compare with previous report from storage
+- `--storage-backend` - Storage backend: file or sqlite (default: file)
+- `--storage-path` - Custom storage path (default: ~/.cra)
+
+## Usage Examples
+
+### Basic Analysis
+
 ```bash
-# Basic analysis with all Phase 2 features
+# Analyze current directory
 code-review-assistant analyze .
 
-# With custom Phase 1 thresholds
-code-review-assistant analyze . --large-file-threshold 1000 --long-function-threshold 75
+# Analyze specific project
+code-review-assistant analyze /path/to/project
 
-# With custom Phase 2 thresholds
-code-review-assistant analyze . --complexity-threshold 15 --min-coverage-threshold 80
+# Verbose mode with detailed per-file metrics
+code-review-assistant analyze . --verbose
+```
 
+### Custom Thresholds
+
+```bash
+# Strict thresholds for high-quality codebases
+code-review-assistant analyze . \
+  --large-file-threshold 300 \
+  --long-function-threshold 30 \
+  --complexity-threshold 8 \
+  --min-coverage-threshold 80
+
+# Relaxed thresholds for legacy codebases
+code-review-assistant analyze . \
+  --large-file-threshold 1000 \
+  --complexity-threshold 15 \
+  --min-coverage-threshold 30
+```
+
+### Output Formats
+
+```bash
+# Generate Markdown report
+code-review-assistant analyze . --format markdown --output-file report.md
+
+# Generate JSON report for CI/CD
+code-review-assistant analyze . --format json --output-file report.json
+
+# Compact JSON output
+code-review-assistant analyze . --format json --json-pretty=false
+```
+
+### Historical Tracking
+
+```bash
+# Save report to file storage (default)
+code-review-assistant analyze . --save-report
+
+# Use SQLite for better querying
+code-review-assistant analyze . --save-report --storage-backend sqlite
+
+# Save and compare with previous report
+code-review-assistant analyze . --save-report --compare
+
+# Custom storage location
+code-review-assistant analyze . --save-report --storage-path /custom/path
+```
+
+### Advanced Workflows
+
+```bash
 # Exclude additional patterns
 code-review-assistant analyze . --exclude "generated/**" --exclude "**/*.pb.go"
 
-# Verbose mode (shows per-file, per-package coverage, and dependency details)
-code-review-assistant analyze . --verbose
-
-# Disable coverage analysis for faster execution
+# Disable coverage for faster analysis
 code-review-assistant analyze . --enable-coverage=false
 
 # Strict dependency checking
 code-review-assistant analyze . --max-imports 5 --max-external-dependencies 3
+
+# Complete workflow with Markdown output and comparison
+code-review-assistant analyze . \
+  --format markdown \
+  --output-file report.md \
+  --save-report \
+  --compare \
+  --verbose
 ```
 
 ## Example Output
+
+### Console Output
 
 ```
 Code Review Assistant - Analysis Report
 ============================================================
 
 Project: /Users/you/myproject
-Analyzed: 2025-12-19 13:28:56
+Analyzed: 2025-12-20 16:30:00
+
+COMPARISON WITH PREVIOUS REPORT
+------------------------------------------------------------
+Previous: 2025-12-19 10:15:00
+
+Complexity:    ✅  IMPROVING
+Coverage:      ➡️  STABLE
+Issue Count:   📉  WORSENING
+
+      METRIC     | PREVIOUS | CURRENT |   CHANGE
+-----------------+----------+---------+--------------
+  Files          |       40 |      42 | +2 (+5.0%)
+  Lines          |    4,892 |   5,234 | +342 (+7.0%)
+  Functions      |      148 |     156 | +8 (+5.4%)
+  Avg Complexity |     4.50 |    4.20 | -0.30 (-6.7%)
+  Avg Coverage   |   67.5%  |  68.5%  | +1.00 (+1.5%)
+  Issues         |       12 |      15 | +3 (+25.0%)
 
 SUMMARY
 ------------------------------------------------------------
-Total Files:          42
-Total Lines:          5,234
-Code Lines:           3,845 (73.5%)
-Comment Lines:        892 (17.0%)
-Blank Lines:          497 (9.5%)
-Total Functions:      156
+      METRIC          VALUE
+------------------+--------------
+  Total Files      42
+  Total Lines      5,234
+  Code Lines       3,845 (73.5%)
+  Comment Lines    892 (17.0%)
+  Blank Lines      497 (9.5%)
+  Total Functions  156
 
 AGGREGATE METRICS
 ------------------------------------------------------------
-Average Function Length       24.6 lines
-Function Length (95th %%ile)  68 lines
-Comment Ratio                 17.0%
-Average Complexity            4.2
-Complexity (95th %%ile)       12
+  Average Function Length       24.6 lines
+  Function Length (95th %ile)   68 lines
+  Comment Ratio                 17.0%
+  Average Complexity            4.2
+  Complexity (95th %ile)        12
 
 ISSUES FOUND (15)
 ------------------------------------------------------------
-⚠️  [WARNING] Package myproject/internal/api has low test coverage
-  Coverage: 35 (threshold: 50)
+⚠️  [WARNING] Package has low test coverage
+  Package: myproject/internal/api
+  Coverage: 35.0% (threshold: 50.0%)
 
 ⚠️  [WARNING] Function has high cyclomatic complexity
   File: internal/processor/transform.go:45
@@ -220,38 +361,33 @@ ISSUES FOUND (15)
   Function: HandleRequest
   Parameters: 7 (threshold: 5)
 
-⚠️  [WARNING] Function has deep nesting (depth: 5)
-  File: pkg/validator/rules.go:67
-  Function: ValidateComplex
-  Nesting Depth: 5 (threshold: 4)
-
 ℹ️  [INFO] Magic number should be replaced with a named constant: 1000
   File: pkg/utils/helpers.go:42
   Function: CalculateLimit
 
 LARGEST FILES
 ------------------------------------------------------------
-1.   internal/server/handler.go         687 lines
-2.   pkg/database/migrations.go         542 lines
-3.   internal/api/routes.go             498 lines
+  1.  internal/server/handler.go         687 lines
+  2.  pkg/database/migrations.go         542 lines
+  3.  internal/api/routes.go             498 lines
 
 MOST COMPLEX FUNCTIONS
 ------------------------------------------------------------
-1.   ProcessComplexData    CC=15  82 lines   internal/processor/transform.go
-2.   ValidateInput         CC=12  54 lines   pkg/validator/rules.go
-3.   HandleRequest          CC=11  95 lines   internal/server/handler.go
+  1.  ProcessComplexData    CC=15  82 lines   internal/processor/transform.go
+  2.  ValidateInput         CC=12  54 lines   pkg/validator/rules.go
+  3.  HandleRequest         CC=11  95 lines   internal/server/handler.go
 
 TEST COVERAGE
 ------------------------------------------------------------
-Average Coverage          68.5%
-Total Packages            8
-Packages Below Threshold  2
+  Average Coverage          68.5%
+  Total Packages            8
+  Packages Below Threshold  2
 
 DEPENDENCIES
 ------------------------------------------------------------
-Total Packages                      8
-Packages with High Imports          1
-Packages with High External Deps    0
+  Total Packages                      8
+  Packages with High Imports          1
+  Packages with High External Deps    0
 
 Analysis complete.
 ```
@@ -262,12 +398,12 @@ The tool follows a clean, extensible architecture:
 
 ```
 CLI (Cobra) → Orchestrator → Parser → Analyzer → Reporter
-                               ↓         ↓          ↓
-                          FileMetrics  Analysis  Console Output
-                                         ↓
-                               ┌─────────┼─────────┐
-                               ↓         ↓         ↓
-                          Detectors  Coverage  Dependencies
+                  ↓             ↓         ↓          ↓
+              Storage      FileMetrics  Issues   Multiple
+                  ↓                       ↓       Formats
+              Comparison              Detectors
+                                      Coverage
+                                      Dependencies
 ```
 
 ### Components
@@ -277,9 +413,11 @@ CLI (Cobra) → Orchestrator → Parser → Analyzer → Reporter
   - **Detectors Registry**: Modular anti-pattern detection system
   - **Coverage Runner**: Executes `go test -cover` and parses results
   - **Dependency Analyzer**: Categorizes imports and detects circular dependencies
-- **Reporter**: Formats and outputs comprehensive results
-- **Orchestrator**: Coordinates the analysis pipeline
-- **Config**: Multi-level configuration (file → env → CLI flags)
+- **Reporter**: Formats and outputs results in console, Markdown, or JSON
+- **Storage**: Persists reports for historical tracking (file or SQLite backend)
+- **Comparator**: Compares current and previous reports, detects trends
+- **Orchestrator**: Coordinates the complete analysis pipeline
+- **Config**: Multi-level configuration (defaults → file → env → CLI flags)
 
 All major components implement interfaces for easy testing and extensibility.
 
@@ -294,7 +432,10 @@ go test ./...
 # Run with coverage
 go test -cover ./...
 
-# Generate coverage report
+# View coverage by package
+go test -cover ./... | grep coverage
+
+# Generate HTML coverage report
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
@@ -309,47 +450,79 @@ code-review-assistant/
 ├── internal/
 │   ├── parser/               # AST parsing and metrics extraction
 │   ├── analyzer/             # Analysis and aggregation logic
-│   │   └── detectors/        # Anti-pattern detectors (Phase 2.2)
-│   ├── coverage/             # Test coverage analysis (Phase 2.3)
-│   ├── dependencies/         # Dependency analysis (Phase 2.4)
-│   ├── reporter/             # Report formatting and output
+│   │   └── detectors/        # Anti-pattern detectors
+│   ├── coverage/             # Test coverage analysis
+│   ├── dependencies/         # Dependency analysis
+│   ├── comparison/           # Historical comparison logic
+│   ├── reporter/             # Report formatting (console, markdown, JSON)
+│   ├── storage/              # Persistent storage (file, SQLite)
+│   ├── git/                  # Git metadata extraction
 │   ├── orchestrator/         # Pipeline coordination
-│   └── config/               # Configuration management
+│   ├── config/               # Configuration management
+│   └── constants/            # Shared constants
 ├── config/                   # Default configuration
 │   └── config.yaml
+├── examples/                 # Sample output files
+│   ├── sample-report.md
+│   └── sample-report.json
 ├── testdata/                 # Test fixtures
 │   ├── sample/               # Sample code for testing
 │   └── coverage/             # Test coverage samples
 ├── main.go                   # Entry point
-├── CLAUDE.md                 # Implementation progress tracking
 └── README.md
 ```
 
-## Roadmap
+### Test Coverage
 
-### ✅ Phase 1: Basic Metrics (Complete)
-- Lines of code analysis
-- Function metrics
-- Comment ratio calculation
-- Large file and long function detection
+Current test coverage by package:
+- Comparison: **100%**
+- Config: **100%**
+- Git: **100%**
+- Dependencies: **93.8%**
+- Parser: **86.9%**
+- Storage: **75.1%**
+- Reporter: **66.0%**
+- Analyzer: **66.7%**
 
-### ✅ Phase 2: Advanced Analysis (Complete - 2025-12-19)
-- Enhanced cyclomatic complexity calculation
-- Anti-pattern detection (5 detectors)
-- Test coverage integration with `go test -cover`
-- Dependency analysis and circular dependency detection
+## CI/CD Integration
 
-### Phase 3: Advanced Reporting (Planned)
-- Markdown report generation
-- JSON export for CI/CD integration
-- HTML dashboard with charts and visualizations
-- Historical comparison and trend analysis
-- GitHub Actions integration
-- Custom report templates
+The JSON output format makes it easy to integrate with CI/CD pipelines:
+
+```bash
+# GitHub Actions example
+- name: Analyze Code Quality
+  run: |
+    code-review-assistant analyze . \
+      --format json \
+      --output-file report.json \
+      --save-report \
+      --compare
+
+    # Parse JSON and fail if metrics worsen
+    # (Add custom script to check trends)
+```
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
+
+### Adding New Detectors
+
+The detector system is modular and easy to extend:
+
+```go
+// internal/analyzer/detectors/your_detector.go
+func init() {
+    Register("your_detector", &YourDetector{})
+}
+
+type YourDetector struct{}
+
+func (d *YourDetector) Detect(file *parser.FileMetrics, cfg *config.AnalysisConfig) []*analyzer.Issue {
+    // Your detection logic
+    return issues
+}
+```
 
 ## License
 

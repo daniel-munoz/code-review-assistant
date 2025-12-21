@@ -21,8 +21,10 @@ import (
 // This layered approach allows flexible configuration for different environments
 // while maintaining sensible defaults.
 type Config struct {
-	Analysis AnalysisConfig `mapstructure:"analysis"`
-	Output   OutputConfig   `mapstructure:"output"`
+	Analysis   AnalysisConfig   `mapstructure:"analysis"`
+	Output     OutputConfig     `mapstructure:"output"`
+	Storage    StorageConfig    `mapstructure:"storage"`    // Phase 3: Persistent storage
+	Comparison ComparisonConfig `mapstructure:"comparison"` // Phase 3: Historical comparison
 }
 
 // AnalysisConfig contains all settings that control code analysis behavior.
@@ -63,11 +65,35 @@ type AnalysisConfig struct {
 
 // OutputConfig contains settings that control report formatting and output.
 //
-// Format determines the output style (currently only "console" is supported).
+// Format determines the output style: console, markdown, json.
 // Verbose enables detailed per-file and per-package reporting.
+// OutputFile specifies a file path for output (empty means stdout).
+// JSONPretty controls JSON formatting (pretty vs compact).
 type OutputConfig struct {
-	Format  string `mapstructure:"format"`
-	Verbose bool   `mapstructure:"verbose"`
+	Format     string `mapstructure:"format"`
+	Verbose    bool   `mapstructure:"verbose"`
+	OutputFile string `mapstructure:"output_file"` // Phase 3: File output path
+	JSONPretty bool   `mapstructure:"json_pretty"` // Phase 3: Pretty-print JSON
+}
+
+// StorageConfig contains settings for persistent storage of analysis reports.
+//
+// Phase 3: Enables saving reports for historical tracking and comparison.
+type StorageConfig struct {
+	Enabled     bool   `mapstructure:"enabled"`      // Enable storage
+	Backend     string `mapstructure:"backend"`      // "file" or "sqlite"
+	Path        string `mapstructure:"path"`         // Custom storage path (empty = default)
+	AutoSave    bool   `mapstructure:"auto_save"`    // Automatically save after analysis
+	ProjectMode bool   `mapstructure:"project_mode"` // Use ./.cra instead of ~/.cra
+}
+
+// ComparisonConfig contains settings for historical comparison.
+//
+// Phase 3: Enables comparison with previous analysis runs.
+type ComparisonConfig struct {
+	Enabled         bool    `mapstructure:"enabled"`          // Enable comparison
+	AutoCompare     bool    `mapstructure:"auto_compare"`     // Auto-compare with latest
+	StableThreshold float64 `mapstructure:"stable_threshold"` // % change for "stable" (default: 5.0)
 }
 
 // Default returns a Config with sensible default values for all settings.
@@ -109,8 +135,22 @@ func Default() *Config {
 			DetectCircularDeps:      constants.DefaultDetectCircularDeps,
 		},
 		Output: OutputConfig{
-			Format:  "console",
-			Verbose: false,
+			Format:     "console",
+			Verbose:    false,
+			OutputFile: "",    // Phase 3: Default to stdout
+			JSONPretty: true,  // Phase 3: Pretty-print by default
+		},
+		Storage: StorageConfig{
+			Enabled:     false, // Phase 3: Opt-in
+			Backend:     "file",
+			Path:        "",    // Use default (~/.cra or ./.cra)
+			AutoSave:    false,
+			ProjectMode: false, // Use ~/.cra by default
+		},
+		Comparison: ComparisonConfig{
+			Enabled:         false, // Phase 3: Opt-in
+			AutoCompare:     false,
+			StableThreshold: 5.0, // 5% change threshold
 		},
 	}
 }
@@ -157,6 +197,16 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("analysis.detect_circular_deps", defaults.Analysis.DetectCircularDeps)
 	v.SetDefault("output.format", defaults.Output.Format)
 	v.SetDefault("output.verbose", defaults.Output.Verbose)
+	v.SetDefault("output.output_file", defaults.Output.OutputFile)
+	v.SetDefault("output.json_pretty", defaults.Output.JSONPretty)
+	v.SetDefault("storage.enabled", defaults.Storage.Enabled)
+	v.SetDefault("storage.backend", defaults.Storage.Backend)
+	v.SetDefault("storage.path", defaults.Storage.Path)
+	v.SetDefault("storage.auto_save", defaults.Storage.AutoSave)
+	v.SetDefault("storage.project_mode", defaults.Storage.ProjectMode)
+	v.SetDefault("comparison.enabled", defaults.Comparison.Enabled)
+	v.SetDefault("comparison.auto_compare", defaults.Comparison.AutoCompare)
+	v.SetDefault("comparison.stable_threshold", defaults.Comparison.StableThreshold)
 
 	// Environment variables
 	v.SetEnvPrefix("CRA") // Code Review Assistant
@@ -221,6 +271,8 @@ func (c *Config) Merge(overrides map[string]interface{}) {
 	c.mergeCoverageSettings(overrides)
 	c.mergeDependencySettings(overrides)
 	c.mergeOutputSettings(overrides)
+	c.mergeStorageSettings(overrides)
+	c.mergeComparisonSettings(overrides)
 	c.mergeExcludePatterns(overrides)
 }
 
@@ -258,6 +310,24 @@ func (c *Config) mergeDependencySettings(overrides map[string]interface{}) {
 func (c *Config) mergeOutputSettings(overrides map[string]interface{}) {
 	mergeStringIfNonEmpty(&c.Output.Format, overrides, "format")
 	mergeBool(&c.Output.Verbose, overrides, "verbose")
+	mergeStringIfNonEmpty(&c.Output.OutputFile, overrides, "output_file")
+	mergeBool(&c.Output.JSONPretty, overrides, "json_pretty")
+}
+
+// mergeStorageSettings merges Phase 3 storage settings
+func (c *Config) mergeStorageSettings(overrides map[string]interface{}) {
+	mergeBool(&c.Storage.Enabled, overrides, "storage_enabled")
+	mergeStringIfNonEmpty(&c.Storage.Backend, overrides, "storage_backend")
+	mergeStringIfNonEmpty(&c.Storage.Path, overrides, "storage_path")
+	mergeBool(&c.Storage.AutoSave, overrides, "auto_save")
+	mergeBool(&c.Storage.ProjectMode, overrides, "project_mode")
+}
+
+// mergeComparisonSettings merges Phase 3 comparison settings
+func (c *Config) mergeComparisonSettings(overrides map[string]interface{}) {
+	mergeBool(&c.Comparison.Enabled, overrides, "comparison_enabled")
+	mergeBool(&c.Comparison.AutoCompare, overrides, "auto_compare")
+	mergeFloatIfPositive(&c.Comparison.StableThreshold, overrides, "stable_threshold")
 }
 
 // mergeExcludePatterns appends additional exclude patterns if provided

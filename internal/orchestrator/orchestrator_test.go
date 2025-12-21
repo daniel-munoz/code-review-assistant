@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
+	"github.com/daniel-munoz/code-review-assistant/internal/comparison"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/stretchr/testify/assert"
@@ -51,7 +52,7 @@ type mockReporter struct {
 	errMsg       string
 }
 
-func (m *mockReporter) Report(result *analyzer.AnalysisResult) error {
+func (m *mockReporter) Report(result *analyzer.AnalysisResult, comp *comparison.ComparisonResult) error {
 	m.reportCalled = true
 	if m.shouldErr {
 		return errors.New(m.errMsg)
