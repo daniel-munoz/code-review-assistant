@@ -474,15 +474,30 @@ code-review-assistant/
 
 ### Test Coverage
 
-Current test coverage by package:
+Current test coverage by package (Overall: **74.9%**):
 - Comparison: **100%**
 - Config: **100%**
 - Git: **100%**
 - Dependencies: **93.8%**
-- Parser: **86.9%**
-- Storage: **75.1%**
-- Reporter: **66.0%**
-- Analyzer: **66.7%**
+- Coverage: **87.7%**
+- Parser: **87.3%**
+- CMD: **79.6%**
+- Storage: **76.3%**
+- Reporter: **66.8%**
+- Analyzer: **67.6%**
+- Orchestrator: **59.7%**
+- Detectors: **54.5%**
+
+### Code Quality
+
+This project practices what it preaches! See [IMPROVEMENTS.md](IMPROVEMENTS.md) for a detailed summary of systematic quality improvements made using the tool on itself:
+
+- **Average Cyclomatic Complexity**: 3.4 (Excellent)
+- **95th Percentile Complexity**: 8 (Good)
+- **Average Function Length**: 17.8 lines (Good)
+- **Comment Ratio**: 27.4% (Good)
+
+The codebase has undergone 4 focused improvement sprints targeting complexity reduction, structural organization, and maintainability.
 
 ## CI/CD Integration
 

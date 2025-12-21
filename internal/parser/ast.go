@@ -164,45 +164,55 @@ func calculateComplexity(body *ast.BlockStmt) int {
 	complexity := 1 // Base complexity
 
 	ast.Inspect(body, func(n ast.Node) bool {
-		switch node := n.(type) {
-		case *ast.IfStmt:
-			complexity++
-			// Note: else-if is handled by nested IfStmt
-
-		case *ast.ForStmt:
-			complexity++
-
-		case *ast.RangeStmt:
-			complexity++
-
-		case *ast.SwitchStmt:
-			// Counted through CaseClause below
-
-		case *ast.TypeSwitchStmt:
-			// Counted through CaseClause below
-
-		case *ast.CaseClause:
-			// Each case adds a decision point (except default)
-			if node.List != nil && len(node.List) > 0 {
-				complexity++
-			}
-
-		case *ast.CommClause:
-			// Select case statements
-			if node.Comm != nil {
-				complexity++
-			}
-
-		case *ast.BinaryExpr:
-			// Count logical operators (they create additional paths)
-			if node.Op == token.LAND || node.Op == token.LOR {
-				complexity++
-			}
-		}
+		complexity += getComplexityIncrement(n)
 		return true
 	})
 
 	return complexity
+}
+
+// getComplexityIncrement returns the complexity increment for a given AST node
+func getComplexityIncrement(n ast.Node) int {
+	switch node := n.(type) {
+	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt:
+		return 1
+
+	case *ast.CaseClause:
+		return getCaseComplexity(node)
+
+	case *ast.CommClause:
+		return getCommComplexity(node)
+
+	case *ast.BinaryExpr:
+		return getBinaryExprComplexity(node)
+
+	default:
+		return 0
+	}
+}
+
+// getCaseComplexity returns complexity for case clauses (excluding default)
+func getCaseComplexity(node *ast.CaseClause) int {
+	if node.List != nil && len(node.List) > 0 {
+		return 1
+	}
+	return 0
+}
+
+// getCommComplexity returns complexity for select case statements
+func getCommComplexity(node *ast.CommClause) int {
+	if node.Comm != nil {
+		return 1
+	}
+	return 0
+}
+
+// getBinaryExprComplexity returns complexity for logical operators
+func getBinaryExprComplexity(node *ast.BinaryExpr) int {
+	if node.Op == token.LAND || node.Op == token.LOR {
+		return 1
+	}
+	return 0
 }
 
 // countLinesInFile counts different types of lines in a file

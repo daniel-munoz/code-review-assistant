@@ -218,58 +218,103 @@ func (fs *FileStorage) List(ctx context.Context, projectPath string, opts ListOp
 		return []*ReportMetadata{}, nil // No reports
 	}
 
-	// List all report files
+	// Load all reports from directory
+	reports, err := fs.loadReportsFromDirectory(projectDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter and extract metadata
+	metadata := fs.filterAndExtractMetadata(reports, opts)
+
+	// Sort by timestamp (newest first)
+	fs.sortByTimestamp(metadata)
+
+	// Apply pagination
+	return fs.applyPagination(metadata, opts), nil
+}
+
+// loadReportsFromDirectory loads all JSON report files from a directory
+func (fs *FileStorage) loadReportsFromDirectory(projectDir string) ([]*StoredReport, error) {
 	files, err := filepath.Glob(filepath.Join(projectDir, "*.json"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list reports: %w", err)
 	}
 
-	// Load metadata from each file
-	var metadata []*ReportMetadata
+	var reports []*StoredReport
 	for _, file := range files {
 		report, err := fs.loadReport(file)
 		if err != nil {
 			continue // Skip files that can't be loaded
 		}
+		reports = append(reports, report)
+	}
 
-		// Apply time filters
-		if !opts.Since.IsZero() && report.Timestamp.Before(opts.Since) {
+	return reports, nil
+}
+
+// filterAndExtractMetadata filters reports by time and extracts metadata
+func (fs *FileStorage) filterAndExtractMetadata(reports []*StoredReport, opts ListOptions) []*ReportMetadata {
+	var metadata []*ReportMetadata
+
+	for _, report := range reports {
+		if !fs.passesTimeFilters(report, opts) {
 			continue
 		}
-		if !opts.Until.IsZero() && report.Timestamp.After(opts.Until) {
-			continue
-		}
 
-		// Extract summary metrics
-		meta := &ReportMetadata{
-			ID:          report.ID,
-			ProjectPath: report.ProjectPath,
-			Timestamp:   report.Timestamp,
-			GitCommit:   report.GitCommit,
-			GitBranch:   report.GitBranch,
-		}
-
-		if report.Result != nil {
-			meta.TotalFiles = report.Result.TotalFiles
-			meta.TotalLines = report.Result.TotalLines
-			meta.IssueCount = len(report.Result.Issues)
-			if report.Result.Metrics != nil {
-				meta.AvgComplexity = report.Result.Metrics.AverageComplexity
-			}
-			if report.Result.Coverage != nil {
-				meta.AvgCoverage = report.Result.Coverage.AverageCoverage
-			}
-		}
-
+		meta := fs.extractMetadata(report)
 		metadata = append(metadata, meta)
 	}
 
-	// Sort by timestamp (newest first)
+	return metadata
+}
+
+// passesTimeFilters checks if a report passes the time filter criteria
+func (fs *FileStorage) passesTimeFilters(report *StoredReport, opts ListOptions) bool {
+	if !opts.Since.IsZero() && report.Timestamp.Before(opts.Since) {
+		return false
+	}
+	if !opts.Until.IsZero() && report.Timestamp.After(opts.Until) {
+		return false
+	}
+	return true
+}
+
+// extractMetadata extracts metadata from a stored report
+func (fs *FileStorage) extractMetadata(report *StoredReport) *ReportMetadata {
+	meta := &ReportMetadata{
+		ID:          report.ID,
+		ProjectPath: report.ProjectPath,
+		Timestamp:   report.Timestamp,
+		GitCommit:   report.GitCommit,
+		GitBranch:   report.GitBranch,
+	}
+
+	if report.Result != nil {
+		meta.TotalFiles = report.Result.TotalFiles
+		meta.TotalLines = report.Result.TotalLines
+		meta.IssueCount = len(report.Result.Issues)
+
+		if report.Result.Metrics != nil {
+			meta.AvgComplexity = report.Result.Metrics.AverageComplexity
+		}
+		if report.Result.Coverage != nil {
+			meta.AvgCoverage = report.Result.Coverage.AverageCoverage
+		}
+	}
+
+	return meta
+}
+
+// sortByTimestamp sorts metadata by timestamp (newest first)
+func (fs *FileStorage) sortByTimestamp(metadata []*ReportMetadata) {
 	sort.Slice(metadata, func(i, j int) bool {
 		return metadata[i].Timestamp.After(metadata[j].Timestamp)
 	})
+}
 
-	// Apply offset and limit
+// applyPagination applies offset and limit to metadata
+func (fs *FileStorage) applyPagination(metadata []*ReportMetadata, opts ListOptions) []*ReportMetadata {
 	start := opts.Offset
 	if start > len(metadata) {
 		start = len(metadata)
@@ -280,7 +325,7 @@ func (fs *FileStorage) List(ctx context.Context, projectPath string, opts ListOp
 		end = start + opts.Limit
 	}
 
-	return metadata[start:end], nil
+	return metadata[start:end]
 }
 
 // Delete removes a report by ID.

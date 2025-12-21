@@ -152,65 +152,89 @@ func createStorage(cfg *config.StorageConfig) (storage.Storage, error) {
 func (o *Orchestrator) Run(targetPath string) error {
 	ctx := context.Background()
 
-	// Phase 3 - Step 1: Load previous report for comparison
-	var previousReport *analyzer.AnalysisResult
-	var previousTimestamp time.Time
-	if o.comparator != nil && o.storage != nil {
-		prev, err := o.storage.GetLatest(ctx, targetPath)
-		if err == nil && prev != nil {
-			previousReport = prev.Result
-			previousTimestamp = prev.Timestamp
-		}
-		// Ignore errors - no previous report is acceptable
-	}
+	// Load previous report for comparison
+	previousReport, previousTimestamp := o.loadPreviousReport(ctx, targetPath)
 
-	// Step 2: Parse all Go files
-	fileMetrics, parseErrors := o.parser.ParseDirectory(targetPath, o.config.Analysis.ExcludePatterns)
+	// Parse and validate files
+	fileMetrics, parseErrors := o.parseAndValidate(targetPath)
+	o.reportParseErrors(parseErrors)
 
-	// Report parse errors but continue with successfully parsed files
-	if len(parseErrors) > 0 {
-		fmt.Printf("Warning: %d files failed to parse:\n", len(parseErrors))
-		for i, err := range parseErrors {
-			if i >= 5 {
-				fmt.Printf("  ... and %d more errors\n", len(parseErrors)-5)
-				break
-			}
-			fmt.Printf("  - %v\n", err)
-		}
-		fmt.Println()
-	}
-
-	// Check if we have any files to analyze
 	if len(fileMetrics) == 0 {
 		return fmt.Errorf("no Go files found to analyze in %s", targetPath)
 	}
 
-	// Step 3: Analyze the parsed metrics
+	// Analyze the parsed metrics
 	result, err := o.analyzer.Analyze(targetPath, fileMetrics)
 	if err != nil {
 		return fmt.Errorf("analysis failed: %w", err)
 	}
 
-	// Phase 3 - Step 4: Run comparison if enabled
-	var comparisonResult *comparison.ComparisonResult
-	if o.comparator != nil && previousReport != nil {
-		comparisonResult = o.comparator.Compare(result, previousReport, previousTimestamp)
-	}
-
-	// Step 5: Report the results (including comparison if available)
+	// Run comparison and generate report
+	comparisonResult := o.runComparison(result, previousReport, previousTimestamp)
 	if err := o.reporter.Report(result, comparisonResult); err != nil {
 		return fmt.Errorf("failed to generate report: %w", err)
 	}
 
-	// Phase 3 - Step 6: Save report to storage
-	if o.storage != nil {
-		if err := o.saveReport(ctx, targetPath, result); err != nil {
-			// Log error but don't fail the pipeline
-			fmt.Printf("Warning: failed to save report: %v\n", err)
-		}
-	}
+	// Save report to storage (non-fatal)
+	o.saveReportIfEnabled(ctx, targetPath, result)
 
 	return nil
+}
+
+// loadPreviousReport loads the most recent report for comparison
+func (o *Orchestrator) loadPreviousReport(ctx context.Context, targetPath string) (*analyzer.AnalysisResult, time.Time) {
+	if o.comparator == nil || o.storage == nil {
+		return nil, time.Time{}
+	}
+
+	prev, err := o.storage.GetLatest(ctx, targetPath)
+	if err != nil || prev == nil {
+		return nil, time.Time{}
+	}
+
+	return prev.Result, prev.Timestamp
+}
+
+// parseAndValidate parses all Go files in the target path
+func (o *Orchestrator) parseAndValidate(targetPath string) ([]*parser.FileMetrics, []error) {
+	return o.parser.ParseDirectory(targetPath, o.config.Analysis.ExcludePatterns)
+}
+
+// reportParseErrors reports parsing errors to the user (max 5 errors shown)
+func (o *Orchestrator) reportParseErrors(parseErrors []error) {
+	if len(parseErrors) == 0 {
+		return
+	}
+
+	fmt.Printf("Warning: %d files failed to parse:\n", len(parseErrors))
+	maxErrors := 5
+	for i, err := range parseErrors {
+		if i >= maxErrors {
+			fmt.Printf("  ... and %d more errors\n", len(parseErrors)-maxErrors)
+			break
+		}
+		fmt.Printf("  - %v\n", err)
+	}
+	fmt.Println()
+}
+
+// runComparison runs comparison if enabled and previous report exists
+func (o *Orchestrator) runComparison(result, previousReport *analyzer.AnalysisResult, previousTimestamp time.Time) *comparison.ComparisonResult {
+	if o.comparator == nil || previousReport == nil {
+		return nil
+	}
+	return o.comparator.Compare(result, previousReport, previousTimestamp)
+}
+
+// saveReportIfEnabled saves the report to storage if storage is enabled
+func (o *Orchestrator) saveReportIfEnabled(ctx context.Context, targetPath string, result *analyzer.AnalysisResult) {
+	if o.storage == nil {
+		return
+	}
+
+	if err := o.saveReport(ctx, targetPath, result); err != nil {
+		fmt.Printf("Warning: failed to save report: %v\n", err)
+	}
 }
 
 // saveReport saves the analysis report to storage with metadata.

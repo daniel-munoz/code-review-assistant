@@ -309,10 +309,342 @@ func resetAnalyzeFlags() {
 	longFunctionThreshold = 0
 	complexityThreshold = 0
 	outputFormat = ""
+	outputFile = ""
+	jsonPretty = true
 	enableCoverage = true
 	minCoverageThreshold = 0
 	coverageTimeout = 0
 	maxImports = 0
 	maxExternalDependencies = 0
 	detectCircularDeps = true
+	saveReport = false
+	compareReport = false
+	storageBackend = "file"
+	storagePath = ""
+}
+
+func TestGetTargetPath(t *testing.T) {
+	testCases := []struct {
+		name     string
+		args     []string
+		expected string
+	}{
+		{
+			name:     "with path argument",
+			args:     []string{"/some/path"},
+			expected: "/some/path",
+		},
+		{
+			name:     "with empty args defaults to current directory",
+			args:     []string{},
+			expected: ".",
+		},
+		{
+			name:     "with multiple args uses first",
+			args:     []string{"/first/path", "/second/path"},
+			expected: "/first/path",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := getTargetPath(tc.args)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestValidatePath(t *testing.T) {
+	t.Run("valid path - current directory", func(t *testing.T) {
+		err := validatePath(".")
+		assert.NoError(t, err)
+	})
+
+	t.Run("valid path - temp directory", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "validate-test-*")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		err = validatePath(tempDir)
+		assert.NoError(t, err)
+	})
+
+	t.Run("invalid path - nonexistent", func(t *testing.T) {
+		err := validatePath("/nonexistent/path/12345")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "path does not exist")
+	})
+}
+
+func TestBuildOverridesMap(t *testing.T) {
+	resetAnalyzeFlags()
+
+	t.Run("with no flags set", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		overrides := buildOverridesMap(cmd)
+
+		// Should be empty or minimal since no flags are set
+		assert.NotNil(t, overrides)
+	})
+
+	t.Run("with analysis flags set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		largeFileThreshold = 1000
+		longFunctionThreshold = 75
+		complexityThreshold = 15
+		excludePatterns = []string{"vendor/**", "**/*_test.go"}
+
+		cmd := &cobra.Command{}
+		overrides := buildOverridesMap(cmd)
+
+		assert.Equal(t, 1000, overrides["large_file_threshold"])
+		assert.Equal(t, 75, overrides["long_function_threshold"])
+		assert.Equal(t, 15, overrides["complexity_threshold"])
+		assert.Equal(t, []string{"vendor/**", "**/*_test.go"}, overrides["exclude"])
+	})
+
+	t.Run("with output flags set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		outputFormat = "json"
+		outputFile = "report.json"
+		jsonPretty = false
+
+		cmd := &cobra.Command{}
+		overrides := buildOverridesMap(cmd)
+
+		assert.Equal(t, "json", overrides["format"])
+		assert.Equal(t, "report.json", overrides["output_file"])
+		assert.Equal(t, false, overrides["json_pretty"])
+	})
+
+	t.Run("with coverage flags set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		enableCoverage = false
+		minCoverageThreshold = 80.5
+		coverageTimeout = 60
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("enable-coverage", true, "")
+		cmd.Flags().Set("enable-coverage", "false")
+
+		overrides := buildOverridesMap(cmd)
+
+		assert.Equal(t, false, overrides["enable_coverage"])
+		assert.Equal(t, 80.5, overrides["min_coverage_threshold"])
+		assert.Equal(t, 60, overrides["coverage_timeout"])
+	})
+
+	t.Run("with dependency flags set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		maxImports = 20
+		maxExternalDependencies = 15
+		detectCircularDeps = false
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("detect-circular-deps", true, "")
+		cmd.Flags().Set("detect-circular-deps", "false")
+
+		overrides := buildOverridesMap(cmd)
+
+		assert.Equal(t, 20, overrides["max_imports"])
+		assert.Equal(t, 15, overrides["max_external_dependencies"])
+		assert.Equal(t, false, overrides["detect_circular_deps"])
+	})
+
+	t.Run("with storage flags set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		saveReport = true
+		compareReport = true
+		storageBackend = "sqlite"
+		storagePath = "/custom/path"
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("save-report", false, "")
+		cmd.Flags().Bool("compare", false, "")
+		cmd.Flags().Set("save-report", "true")
+		cmd.Flags().Set("compare", "true")
+
+		overrides := buildOverridesMap(cmd)
+
+		assert.Equal(t, true, overrides["storage_enabled"])
+		assert.Equal(t, true, overrides["comparison_enabled"])
+		assert.Equal(t, "sqlite", overrides["storage_backend"])
+		assert.Equal(t, "/custom/path", overrides["storage_path"])
+	})
+}
+
+func TestAddAnalysisOverrides(t *testing.T) {
+	t.Run("adds all analysis overrides when flags are set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		largeFileThreshold = 800
+		longFunctionThreshold = 60
+		complexityThreshold = 12
+		excludePatterns = []string{"vendor/**"}
+
+		overrides := make(map[string]interface{})
+		addAnalysisOverrides(overrides)
+
+		assert.Equal(t, 800, overrides["large_file_threshold"])
+		assert.Equal(t, 60, overrides["long_function_threshold"])
+		assert.Equal(t, 12, overrides["complexity_threshold"])
+		assert.Equal(t, []string{"vendor/**"}, overrides["exclude"])
+	})
+
+	t.Run("does not add overrides when flags are zero/empty", func(t *testing.T) {
+		resetAnalyzeFlags()
+
+		overrides := make(map[string]interface{})
+		addAnalysisOverrides(overrides)
+
+		assert.NotContains(t, overrides, "large_file_threshold")
+		assert.NotContains(t, overrides, "long_function_threshold")
+		assert.NotContains(t, overrides, "complexity_threshold")
+		assert.NotContains(t, overrides, "exclude")
+	})
+}
+
+func TestAddCoverageOverrides(t *testing.T) {
+	t.Run("adds coverage overrides when flags are set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		enableCoverage = false
+		minCoverageThreshold = 70.5
+		coverageTimeout = 45
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("enable-coverage", true, "")
+		cmd.Flags().Set("enable-coverage", "false")
+
+		overrides := make(map[string]interface{})
+		addCoverageOverrides(overrides, cmd)
+
+		assert.Equal(t, false, overrides["enable_coverage"])
+		assert.Equal(t, 70.5, overrides["min_coverage_threshold"])
+		assert.Equal(t, 45, overrides["coverage_timeout"])
+	})
+
+	t.Run("does not add enable_coverage if flag not changed", func(t *testing.T) {
+		resetAnalyzeFlags()
+		enableCoverage = true
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("enable-coverage", true, "")
+
+		overrides := make(map[string]interface{})
+		addCoverageOverrides(overrides, cmd)
+
+		assert.NotContains(t, overrides, "enable_coverage")
+	})
+}
+
+func TestAddDependencyOverrides(t *testing.T) {
+	t.Run("adds dependency overrides when flags are set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		maxImports = 25
+		maxExternalDependencies = 20
+		detectCircularDeps = false
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("detect-circular-deps", true, "")
+		cmd.Flags().Set("detect-circular-deps", "false")
+
+		overrides := make(map[string]interface{})
+		addDependencyOverrides(overrides, cmd)
+
+		assert.Equal(t, 25, overrides["max_imports"])
+		assert.Equal(t, 20, overrides["max_external_dependencies"])
+		assert.Equal(t, false, overrides["detect_circular_deps"])
+	})
+}
+
+func TestAddOutputOverrides(t *testing.T) {
+	t.Run("adds output overrides when flags are set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		outputFormat = "markdown"
+		outputFile = "output.md"
+
+		overrides := make(map[string]interface{})
+		addOutputOverrides(overrides)
+
+		assert.Equal(t, "markdown", overrides["format"])
+		assert.Equal(t, "output.md", overrides["output_file"])
+	})
+
+	t.Run("adds json_pretty only when format is json", func(t *testing.T) {
+		resetAnalyzeFlags()
+		outputFormat = "json"
+		jsonPretty = false
+
+		overrides := make(map[string]interface{})
+		addOutputOverrides(overrides)
+
+		assert.Equal(t, "json", overrides["format"])
+		assert.Equal(t, false, overrides["json_pretty"])
+	})
+
+	t.Run("does not add json_pretty when format is not json", func(t *testing.T) {
+		resetAnalyzeFlags()
+		outputFormat = "console"
+		jsonPretty = false
+
+		overrides := make(map[string]interface{})
+		addOutputOverrides(overrides)
+
+		assert.Equal(t, "console", overrides["format"])
+		assert.NotContains(t, overrides, "json_pretty")
+	})
+}
+
+func TestAddStorageOverrides(t *testing.T) {
+	t.Run("enables storage when save-report is set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		saveReport = true
+		storageBackend = "sqlite"
+		storagePath = "/custom/storage"
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("save-report", false, "")
+		cmd.Flags().Bool("compare", false, "")
+		cmd.Flags().Set("save-report", "true")
+
+		overrides := make(map[string]interface{})
+		addStorageOverrides(overrides, cmd)
+
+		assert.Equal(t, true, overrides["storage_enabled"])
+		assert.Equal(t, "sqlite", overrides["storage_backend"])
+		assert.Equal(t, "/custom/storage", overrides["storage_path"])
+	})
+
+	t.Run("enables storage and comparison when compare is set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		compareReport = true
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("save-report", false, "")
+		cmd.Flags().Bool("compare", false, "")
+		cmd.Flags().Set("compare", "true")
+
+		overrides := make(map[string]interface{})
+		addStorageOverrides(overrides, cmd)
+
+		assert.Equal(t, true, overrides["storage_enabled"])
+		assert.Equal(t, true, overrides["comparison_enabled"])
+	})
+
+	t.Run("enables both when both flags are set", func(t *testing.T) {
+		resetAnalyzeFlags()
+		saveReport = true
+		compareReport = true
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("save-report", false, "")
+		cmd.Flags().Bool("compare", false, "")
+		cmd.Flags().Set("save-report", "true")
+		cmd.Flags().Set("compare", "true")
+
+		overrides := make(map[string]interface{})
+		addStorageOverrides(overrides, cmd)
+
+		assert.Equal(t, true, overrides["storage_enabled"])
+		assert.Equal(t, true, overrides["comparison_enabled"])
+	})
 }

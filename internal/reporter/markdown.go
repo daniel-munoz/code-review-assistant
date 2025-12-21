@@ -11,6 +11,7 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
 	"github.com/daniel-munoz/code-review-assistant/internal/comparison"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
+	"github.com/daniel-munoz/code-review-assistant/internal/constants"
 )
 
 // MarkdownReporter implements Reporter for Markdown output
@@ -127,7 +128,7 @@ func (mr *MarkdownReporter) writeAggregateMetrics(metrics *analyzer.AggregateMet
 	fmt.Fprintf(mr.output, "|--------|-------|\n")
 	fmt.Fprintf(mr.output, "| Average Function Length | %.1f lines |\n", metrics.AverageFunctionLength)
 	fmt.Fprintf(mr.output, "| Function Length (95th %%ile) | %d lines |\n", metrics.FunctionLengthP95)
-	fmt.Fprintf(mr.output, "| Comment Ratio | %.1f%% |\n", metrics.CommentRatio*100)
+	fmt.Fprintf(mr.output, "| Comment Ratio | %.1f%% |\n", metrics.CommentRatio*constants.PercentageMultiplier)
 	fmt.Fprintf(mr.output, "| Average Complexity | %.1f |\n", metrics.AverageComplexity)
 	fmt.Fprintf(mr.output, "| Complexity (95th %%ile) | %d |\n\n", metrics.ComplexityP95)
 }
@@ -332,7 +333,7 @@ func (mr *MarkdownReporter) writeFileDetails(files []*analyzer.FileAnalysis) {
 			file.Metrics.CommentLines,
 			file.Metrics.BlankLines)
 		fmt.Fprintf(mr.output, "- **Functions:** %d\n", len(file.Metrics.Functions))
-		fmt.Fprintf(mr.output, "- **Comment Ratio:** %.1f%%\n", file.Metrics.CommentRatio()*100)
+		fmt.Fprintf(mr.output, "- **Comment Ratio:** %.1f%%\n", file.Metrics.CommentRatio()*constants.PercentageMultiplier)
 
 		if file.LargeFile {
 			fmt.Fprintf(mr.output, "- ⚠️ **Large file**\n")

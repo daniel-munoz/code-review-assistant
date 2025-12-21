@@ -8,6 +8,7 @@ import (
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer/detectors"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
+	"github.com/daniel-munoz/code-review-assistant/internal/constants"
 	"github.com/daniel-munoz/code-review-assistant/internal/coverage"
 	"github.com/daniel-munoz/code-review-assistant/internal/dependencies"
 	parserPkg "github.com/daniel-munoz/code-review-assistant/internal/parser"
@@ -77,67 +78,43 @@ func (ma *MetricsAnalyzer) Analyze(projectPath string, metrics []*parserPkg.File
 		Issues:      make([]*Issue, 0),
 	}
 
-	// Collect all functions for aggregate calculations
+	// Process all files and collect function metrics
+	allFunctions := ma.processAllFiles(result, metrics)
+
+	// Calculate aggregate metrics
+	result.Metrics = calculateAggregateMetrics(metrics, allFunctions)
+
+	// Check overall code quality
+	ma.checkOverallQuality(result)
+
+	// Run additional analyses (coverage and dependencies)
+	ma.runCoverageIfEnabled(projectPath, result)
+	ma.runDependencyAnalysis(projectPath, metrics, result)
+
+	return result, nil
+}
+
+// processAllFiles processes each file, collecting metrics and issues
+func (ma *MetricsAnalyzer) processAllFiles(result *AnalysisResult, metrics []*parserPkg.FileMetrics) []*parserPkg.FunctionMetrics {
 	var allFunctions []*parserPkg.FunctionMetrics
 
-	// Process each file
 	for _, fileMetrics := range metrics {
 		// Update totals
 		result.TotalLines += fileMetrics.TotalLines
 		result.TotalCodeLines += fileMetrics.CodeLines
 		result.TotalFunctions += len(fileMetrics.Functions)
 
-		// Create file analysis
-		fileAnalysis := &FileAnalysis{
-			Path:      fileMetrics.FilePath,
-			Metrics:   fileMetrics,
-			LargeFile: fileMetrics.TotalLines > ma.config.LargeFileThreshold,
-		}
+		// Process file
+		fileAnalysis := ma.createFileAnalysis(fileMetrics)
 		result.Files = append(result.Files, fileAnalysis)
 
-		// Check for large files
-		if fileAnalysis.LargeFile {
-			result.Issues = append(result.Issues, &Issue{
-				Severity:  "warning",
-				Type:      "large_file",
-				File:      fileMetrics.FilePath,
-				Line:      0,
-				Message:   "File exceeds size threshold",
-				Value:     fileMetrics.TotalLines,
-				Threshold: ma.config.LargeFileThreshold,
-			})
-		}
+		// Check file-level issues
+		ma.checkFileIssues(result, fileMetrics, fileAnalysis)
 
-		// Check for long functions and high complexity
+		// Check function-level issues and collect functions
 		for _, fn := range fileMetrics.Functions {
 			allFunctions = append(allFunctions, fn)
-
-			if fn.Lines > ma.config.LongFunctionThreshold {
-				result.Issues = append(result.Issues, &Issue{
-					Severity:  "warning",
-					Type:      "long_function",
-					File:      fileMetrics.FilePath,
-					Line:      fn.StartLine,
-					Function:  fn.FullName(),
-					Message:   "Function exceeds length threshold",
-					Value:     fn.Lines,
-					Threshold: ma.config.LongFunctionThreshold,
-				})
-			}
-
-			// Check for high cyclomatic complexity
-			if fn.Complexity > ma.config.ComplexityThreshold {
-				result.Issues = append(result.Issues, &Issue{
-					Severity:  "warning",
-					Type:      "high_complexity",
-					File:      fileMetrics.FilePath,
-					Line:      fn.StartLine,
-					Function:  fn.FullName(),
-					Message:   "Function has high cyclomatic complexity",
-					Value:     fn.Complexity,
-					Threshold: ma.config.ComplexityThreshold,
-				})
-			}
+			ma.checkFunctionIssues(result, fileMetrics, fn)
 		}
 
 		// Run anti-pattern detectors
@@ -145,10 +122,64 @@ func (ma *MetricsAnalyzer) Analyze(projectPath string, metrics []*parserPkg.File
 		result.Issues = append(result.Issues, detectorIssues...)
 	}
 
-	// Calculate aggregate metrics
-	result.Metrics = calculateAggregateMetrics(metrics, allFunctions)
+	return allFunctions
+}
 
-	// Check overall comment ratio
+// createFileAnalysis creates a file analysis record
+func (ma *MetricsAnalyzer) createFileAnalysis(fileMetrics *parserPkg.FileMetrics) *FileAnalysis {
+	return &FileAnalysis{
+		Path:      fileMetrics.FilePath,
+		Metrics:   fileMetrics,
+		LargeFile: fileMetrics.TotalLines > ma.config.LargeFileThreshold,
+	}
+}
+
+// checkFileIssues checks for file-level issues like large files
+func (ma *MetricsAnalyzer) checkFileIssues(result *AnalysisResult, fileMetrics *parserPkg.FileMetrics, fileAnalysis *FileAnalysis) {
+	if fileAnalysis.LargeFile {
+		result.Issues = append(result.Issues, &Issue{
+			Severity:  "warning",
+			Type:      "large_file",
+			File:      fileMetrics.FilePath,
+			Line:      0,
+			Message:   "File exceeds size threshold",
+			Value:     fileMetrics.TotalLines,
+			Threshold: ma.config.LargeFileThreshold,
+		})
+	}
+}
+
+// checkFunctionIssues checks for function-level issues
+func (ma *MetricsAnalyzer) checkFunctionIssues(result *AnalysisResult, fileMetrics *parserPkg.FileMetrics, fn *parserPkg.FunctionMetrics) {
+	if fn.Lines > ma.config.LongFunctionThreshold {
+		result.Issues = append(result.Issues, &Issue{
+			Severity:  "warning",
+			Type:      "long_function",
+			File:      fileMetrics.FilePath,
+			Line:      fn.StartLine,
+			Function:  fn.FullName(),
+			Message:   "Function exceeds length threshold",
+			Value:     fn.Lines,
+			Threshold: ma.config.LongFunctionThreshold,
+		})
+	}
+
+	if fn.Complexity > ma.config.ComplexityThreshold {
+		result.Issues = append(result.Issues, &Issue{
+			Severity:  "warning",
+			Type:      "high_complexity",
+			File:      fileMetrics.FilePath,
+			Line:      fn.StartLine,
+			Function:  fn.FullName(),
+			Message:   "Function has high cyclomatic complexity",
+			Value:     fn.Complexity,
+			Threshold: ma.config.ComplexityThreshold,
+		})
+	}
+}
+
+// checkOverallQuality checks overall code quality metrics
+func (ma *MetricsAnalyzer) checkOverallQuality(result *AnalysisResult) {
 	if result.Metrics.CommentRatio < ma.config.MinCommentRatio {
 		result.Issues = append(result.Issues, &Issue{
 			Severity:  "info",
@@ -156,32 +187,36 @@ func (ma *MetricsAnalyzer) Analyze(projectPath string, metrics []*parserPkg.File
 			File:      "",
 			Line:      0,
 			Message:   "Overall comment ratio is below recommended threshold",
-			Value:     int(result.Metrics.CommentRatio * 100),
-			Threshold: int(ma.config.MinCommentRatio * 100),
+			Value:     int(result.Metrics.CommentRatio * constants.PercentageMultiplier),
+			Threshold: int(ma.config.MinCommentRatio * constants.PercentageMultiplier),
 		})
 	}
+}
 
-	// Run coverage analysis if enabled
-	if ma.config.EnableCoverage {
-		coverageResults, err := ma.coverageRunner.RunCoverage(projectPath, ma.config.ExcludePatterns)
-		if err != nil {
-			// Log warning but don't fail analysis
-			fmt.Printf("Warning: Coverage analysis failed: %v\n", err)
-		} else {
-			result.Coverage = ma.analyzeCoverage(coverageResults, result)
-		}
+// runCoverageIfEnabled runs coverage analysis if enabled in config
+func (ma *MetricsAnalyzer) runCoverageIfEnabled(projectPath string, result *AnalysisResult) {
+	if !ma.config.EnableCoverage {
+		return
 	}
 
-	// Run dependency analysis
+	coverageResults, err := ma.coverageRunner.RunCoverage(projectPath, ma.config.ExcludePatterns)
+	if err != nil {
+		fmt.Printf("Warning: Coverage analysis failed: %v\n", err)
+		return
+	}
+
+	result.Coverage = ma.analyzeCoverage(coverageResults, result)
+}
+
+// runDependencyAnalysis runs dependency analysis if possible
+func (ma *MetricsAnalyzer) runDependencyAnalysis(projectPath string, metrics []*parserPkg.FileMetrics, result *AnalysisResult) {
 	depAnalyzer, err := dependencies.NewAnalyzer(projectPath)
 	if err != nil {
-		// Log warning but don't fail analysis
 		fmt.Printf("Warning: Dependency analysis failed: %v\n", err)
-	} else {
-		result.Dependencies = ma.analyzeDependencies(depAnalyzer, metrics, result)
+		return
 	}
 
-	return result, nil
+	result.Dependencies = ma.analyzeDependencies(depAnalyzer, metrics, result)
 }
 
 // runDetectors re-parses file and runs anti-pattern detectors on all functions

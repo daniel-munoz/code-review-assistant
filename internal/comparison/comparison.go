@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
+	"github.com/daniel-munoz/code-review-assistant/internal/constants"
 )
 
 // Comparator compares analysis results to identify trends and changes.
@@ -117,8 +118,8 @@ func (c *Comparator) calculateDeltas(current, previous *analyzer.AnalysisResult)
 			Change:   current.Metrics.AverageComplexity - previous.Metrics.AverageComplexity,
 		}
 		deltas.AvgComplexity.Percent = c.percentChange(
-			int(deltas.AvgComplexity.Previous*100),
-			int(deltas.AvgComplexity.Current*100),
+			int(deltas.AvgComplexity.Previous*constants.PercentageMultiplier),
+			int(deltas.AvgComplexity.Current*constants.PercentageMultiplier),
 		)
 	}
 
@@ -130,8 +131,8 @@ func (c *Comparator) calculateDeltas(current, previous *analyzer.AnalysisResult)
 			Change:   current.Coverage.AverageCoverage - previous.Coverage.AverageCoverage,
 		}
 		deltas.AvgCoverage.Percent = c.percentChange(
-			int(deltas.AvgCoverage.Previous*100),
-			int(deltas.AvgCoverage.Current*100),
+			int(deltas.AvgCoverage.Previous*constants.PercentageMultiplier),
+			int(deltas.AvgCoverage.Current*constants.PercentageMultiplier),
 		)
 	}
 
@@ -245,9 +246,9 @@ func (c *Comparator) percentChange(previous, current int) float64 {
 		if current == 0 {
 			return 0
 		}
-		return 100.0 // Changed from 0 to something
+		return constants.PercentageMultiplier // Changed from 0 to something
 	}
-	return (float64(current-previous) / float64(previous)) * 100.0
+	return (float64(current-previous) / float64(previous)) * constants.PercentageMultiplier
 }
 
 // ComparisonResult contains the results of comparing two analysis runs.

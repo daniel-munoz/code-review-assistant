@@ -284,12 +284,275 @@ func TestParseCoverage_EdgeCases(t *testing.T) {
 }
 
 func TestTimeout(t *testing.T) {
-	t.Skip("Skipping timeout test - not essential for coverage")
-
 	t.Run("runner respects timeout setting", func(t *testing.T) {
 		// Create runner with very short timeout
 		runner := NewRunner(1)
 
 		assert.Equal(t, 1*time.Second, runner.timeout, "timeout should be 1 second")
+	})
+
+	t.Run("runner with large timeout", func(t *testing.T) {
+		runner := NewRunner(300)
+
+		assert.Equal(t, 300*time.Second, runner.timeout, "timeout should be 5 minutes")
+	})
+}
+
+func TestRunCoverage_ErrorHandling(t *testing.T) {
+	t.Run("handles nonexistent project path", func(t *testing.T) {
+		runner := NewRunner(30)
+
+		results, err := runner.RunCoverage("/nonexistent/path/12345", []string{})
+
+		assert.Error(t, err, "should return error for nonexistent path")
+		assert.Contains(t, err.Error(), "failed to find packages")
+		assert.Nil(t, results, "results should be nil on error")
+	})
+
+	t.Run("handles empty project path", func(t *testing.T) {
+		runner := NewRunner(30)
+
+		// Empty path will default to current directory which should work
+		results, err := runner.RunCoverage(".", []string{})
+
+		// Either succeeds or fails gracefully
+		if err != nil {
+			assert.Contains(t, err.Error(), "failed to find packages")
+		} else {
+			assert.NotNil(t, results)
+		}
+	})
+}
+
+func TestFindPackages_ExcludePatterns(t *testing.T) {
+	runner := NewRunner(30)
+
+	t.Run("excludes testdata packages by default", func(t *testing.T) {
+		// Test that shouldExclude correctly identifies testdata packages
+		testPackages := []string{
+			"github.com/user/project/testdata",
+			"github.com/user/project/internal/testdata/helper",
+			"github.com/user/project/pkg/testdata",
+		}
+
+		for _, pkg := range testPackages {
+			excluded := runner.shouldExclude(pkg, []string{})
+			assert.True(t, excluded, "should exclude package: %s", pkg)
+		}
+	})
+
+	t.Run("excludes vendor packages by default", func(t *testing.T) {
+		testPackages := []string{
+			"github.com/user/project/vendor/external",
+			"github.com/user/project/vendor/github.com/some/lib",
+		}
+
+		for _, pkg := range testPackages {
+			excluded := runner.shouldExclude(pkg, []string{})
+			assert.True(t, excluded, "should exclude package: %s", pkg)
+		}
+	})
+
+	t.Run("does not exclude normal packages", func(t *testing.T) {
+		testPackages := []string{
+			"github.com/user/project/internal/parser",
+			"github.com/user/project/pkg/utils",
+			"github.com/user/project/cmd",
+		}
+
+		for _, pkg := range testPackages {
+			excluded := runner.shouldExclude(pkg, []string{})
+			assert.False(t, excluded, "should not exclude package: %s", pkg)
+		}
+	})
+}
+
+func TestRunPackageCoverage_ErrorScenarios(t *testing.T) {
+	runner := NewRunner(30)
+
+	t.Run("handles package with no test files", func(t *testing.T) {
+		// This will actually execute go test, so we need a real package
+		// We can test the logic by checking the function signature and structure
+		result := runner.runPackageCoverage("github.com/daniel-munoz/code-review-assistant/internal/constants")
+
+		require.NotNil(t, result)
+		assert.Equal(t, "github.com/daniel-munoz/code-review-assistant/internal/constants", result.PackagePath)
+
+		// Should either be skipped (no tests) or have coverage
+		if result.Skipped {
+			assert.Equal(t, 0.0, result.Coverage, "skipped package should have 0 coverage")
+			assert.Empty(t, result.Error, "skipped package should not have error")
+		}
+	})
+
+	t.Run("result structure for nonexistent package", func(t *testing.T) {
+		result := runner.runPackageCoverage("github.com/nonexistent/package/12345")
+
+		require.NotNil(t, result)
+		assert.Equal(t, "github.com/nonexistent/package/12345", result.PackagePath)
+		// Should have an error since package doesn't exist
+		assert.NotEmpty(t, result.Error, "should have error for nonexistent package")
+	})
+}
+
+func TestParseCoverage_DetailedEdgeCases(t *testing.T) {
+	runner := NewRunner(30)
+
+	t.Run("handles coverage at boundaries", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			output   string
+			expected float64
+		}{
+			{
+				name:     "0.0% coverage",
+				output:   "coverage: 0.0% of statements",
+				expected: 0.0,
+			},
+			{
+				name:     "0.1% coverage",
+				output:   "coverage: 0.1% of statements",
+				expected: 0.1,
+			},
+			{
+				name:     "99.9% coverage",
+				output:   "coverage: 99.9% of statements",
+				expected: 99.9,
+			},
+			{
+				name:     "100.0% coverage",
+				output:   "coverage: 100.0% of statements",
+				expected: 100.0,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				coverage, err := runner.parseCoverage(tc.output)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expected, coverage)
+			})
+		}
+	})
+
+	t.Run("handles coverage with various whitespace", func(t *testing.T) {
+		testCases := []string{
+			"coverage: 75.5% of statements",
+			"coverage:  75.5%  of  statements",
+			"coverage:\t75.5%\tof\tstatements",
+			"coverage:   75.5%   of   statements",
+		}
+
+		for _, output := range testCases {
+			coverage, err := runner.parseCoverage(output)
+			require.NoError(t, err, "should parse: %s", output)
+			assert.Equal(t, 75.5, coverage)
+		}
+	})
+
+	t.Run("handles real go test output formats", func(t *testing.T) {
+		realOutputs := []struct {
+			name     string
+			output   string
+			expected float64
+		}{
+			{
+				name: "standard pass with coverage",
+				output: `=== RUN   TestExample
+--- PASS: TestExample (0.00s)
+PASS
+coverage: 85.7% of statements
+ok  	github.com/test/pkg	0.123s`,
+				expected: 85.7,
+			},
+			{
+				name: "multiple packages output",
+				output: `?   	github.com/test/pkg1	[no test files]
+ok  	github.com/test/pkg2	0.123s	coverage: 92.3% of statements
+ok  	github.com/test/pkg3	0.456s	coverage: 78.1% of statements`,
+				expected: 92.3, // Should find first match
+			},
+		}
+
+		for _, tc := range realOutputs {
+			t.Run(tc.name, func(t *testing.T) {
+				coverage, err := runner.parseCoverage(tc.output)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expected, coverage)
+			})
+		}
+	})
+}
+
+func TestPackageCoverage_AllFields(t *testing.T) {
+	t.Run("package with successful coverage", func(t *testing.T) {
+		pc := &PackageCoverage{
+			PackagePath: "github.com/user/project/pkg/utils",
+			Coverage:    88.5,
+			Error:       "",
+			Skipped:     false,
+		}
+
+		assert.Equal(t, "github.com/user/project/pkg/utils", pc.PackagePath)
+		assert.Equal(t, 88.5, pc.Coverage)
+		assert.Empty(t, pc.Error)
+		assert.False(t, pc.Skipped)
+	})
+
+	t.Run("package with 0% coverage", func(t *testing.T) {
+		pc := &PackageCoverage{
+			PackagePath: "github.com/user/project/pkg/empty",
+			Coverage:    0.0,
+			Error:       "",
+			Skipped:     false,
+		}
+
+		assert.Equal(t, 0.0, pc.Coverage)
+		assert.False(t, pc.Skipped, "0% coverage doesn't mean skipped")
+	})
+
+	t.Run("package with compilation error", func(t *testing.T) {
+		pc := &PackageCoverage{
+			PackagePath: "github.com/user/project/pkg/broken",
+			Coverage:    0,
+			Error:       "compilation failed: syntax error",
+			Skipped:     false,
+		}
+
+		assert.NotEmpty(t, pc.Error)
+		assert.Contains(t, pc.Error, "compilation failed")
+		assert.False(t, pc.Skipped)
+	})
+
+	t.Run("package with timeout error", func(t *testing.T) {
+		pc := &PackageCoverage{
+			PackagePath: "github.com/user/project/pkg/slow",
+			Coverage:    0,
+			Error:       "test timeout exceeded",
+			Skipped:     false,
+		}
+
+		assert.Contains(t, pc.Error, "timeout")
+	})
+}
+
+func TestRunner_Timeout(t *testing.T) {
+	t.Run("different timeout values", func(t *testing.T) {
+		testCases := []struct {
+			seconds  int
+			expected time.Duration
+		}{
+			{0, 0},
+			{1, 1 * time.Second},
+			{30, 30 * time.Second},
+			{60, 60 * time.Second},
+			{120, 120 * time.Second},
+			{300, 300 * time.Second},
+		}
+
+		for _, tc := range testCases {
+			runner := NewRunner(tc.seconds)
+			assert.Equal(t, tc.expected, runner.timeout, "timeout for %d seconds", tc.seconds)
+		}
 	})
 }
