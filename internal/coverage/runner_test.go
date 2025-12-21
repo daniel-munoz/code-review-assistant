@@ -310,6 +310,10 @@ func TestRunCoverage_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("handles empty project path", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("Skipping slow integration test in short mode")
+		}
+
 		runner := NewRunner(30)
 
 		// Empty path will default to current directory which should work
@@ -368,6 +372,10 @@ func TestFindPackages_ExcludePatterns(t *testing.T) {
 }
 
 func TestRunPackageCoverage_ErrorScenarios(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping slow integration tests in short mode")
+	}
+
 	runner := NewRunner(30)
 
 	t.Run("handles package with no test files", func(t *testing.T) {

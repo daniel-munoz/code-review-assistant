@@ -86,7 +86,7 @@ Or build from source:
 ```bash
 git clone https://github.com/daniel-munoz/code-review-assistant.git
 cd code-review-assistant
-go build -o code-review-assistant
+go build -buildvcs=false -o code-review-assistant
 ```
 
 ## Quick Start
@@ -426,19 +426,24 @@ All major components implement interfaces for easy testing and extensibility.
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (fast - skips slow integration tests)
+go test -short ./...
+
+# Run all tests including slow integration tests
 go test ./...
 
 # Run with coverage
-go test -cover ./...
+go test -short -cover ./...
 
 # View coverage by package
-go test -cover ./... | grep coverage
+go test -short -cover ./... | grep coverage
 
 # Generate HTML coverage report
-go test -coverprofile=coverage.out ./...
+go test -short -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
+
+**Performance Tip:** Use `-short` flag to skip slow integration tests that execute real `go test` commands. This reduces test time from ~33s to ~3.5s (90% faster).
 
 ### Project Structure
 
