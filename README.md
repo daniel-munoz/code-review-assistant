@@ -97,7 +97,7 @@ Run it on your codebase and discover similar opportunities!
 Install the latest stable release:
 
 ```bash
-go install github.com/daniel-munoz/code-review-assistant@v1.0.0
+go install github.com/daniel-munoz/code-review-assistant@v1.0.1
 ```
 
 Or build from source:
@@ -105,7 +105,7 @@ Or build from source:
 ```bash
 git clone https://github.com/daniel-munoz/code-review-assistant.git
 cd code-review-assistant
-git checkout v1.0.0
+git checkout v1.0.1
 go build -o code-review-assistant
 ```
 
