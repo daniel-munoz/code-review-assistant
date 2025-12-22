@@ -1,5 +1,11 @@
 # Code Review Assistant
 
+![Version](https://img.shields.io/badge/version-1.0-blue)
+![Go Version](https://img.shields.io/badge/go-1.21%2B-00ADD8)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+**Status: Production Ready (v1.0)**
+
 A comprehensive CLI tool that analyzes Go codebases to provide actionable insights about code quality, complexity, maintainability, test coverage, and dependencies. Track your code quality metrics over time with historical comparison and multiple output formats.
 
 ## Features
@@ -75,10 +81,23 @@ Modular detector system identifies common code smells:
 - Per-project or global configuration
 - All thresholds and settings configurable
 
+## What Can It Do?
+
+This tool helped improve its own codebase! See [IMPROVEMENTS.md](IMPROVEMENTS.md) for a detailed case study:
+
+- **Reduced average complexity** from higher values to **3.4** (Excellent)
+- **Identified and refactored 4 major hotspots** through 4 focused sprints
+- **Maintained 74.9% test coverage** with no regressions
+- **Improved code organization** - split large files, extracted helpers
+
+Run it on your codebase and discover similar opportunities!
+
 ## Installation
 
+Install the latest stable release:
+
 ```bash
-go install github.com/daniel-munoz/code-review-assistant@latest
+go install github.com/daniel-munoz/code-review-assistant@v1.0.0
 ```
 
 Or build from source:
@@ -86,7 +105,8 @@ Or build from source:
 ```bash
 git clone https://github.com/daniel-munoz/code-review-assistant.git
 cd code-review-assistant
-go build -buildvcs=false -o code-review-assistant
+git checkout v1.0.0
+go build -o code-review-assistant
 ```
 
 ## Quick Start
@@ -114,6 +134,12 @@ Save and compare with previous analysis:
 ```bash
 code-review-assistant analyze . --save-report --compare
 ```
+
+## Performance
+
+- **Fast**: Analyzes 6,000+ line codebase in ~2-3 seconds
+- **Efficient**: Test suite runs in 3.5s with `-short` flag (skips slow integration tests)
+- **Scalable**: Handles projects of varying sizes efficiently
 
 ## Configuration
 
@@ -521,6 +547,50 @@ The JSON output format makes it easy to integrate with CI/CD pipelines:
     # Parse JSON and fail if metrics worsen
     # (Add custom script to check trends)
 ```
+
+## Troubleshooting
+
+### Coverage Analysis Timeout
+
+If coverage analysis times out on large projects:
+
+```bash
+code-review-assistant analyze . --coverage-timeout 60  # Increase to 60s
+```
+
+### Exclude Generated Files
+
+Add to config.yaml or use CLI:
+
+```bash
+code-review-assistant analyze . --exclude "**/*_gen.go" --exclude "**/*.pb.go"
+```
+
+### Disable Coverage for Faster Analysis
+
+```bash
+code-review-assistant analyze . --enable-coverage=false
+```
+
+### Storage Issues
+
+If you encounter storage errors, try using a custom path:
+
+```bash
+code-review-assistant analyze . --save-report --storage-path /custom/path
+```
+
+## Known Limitations
+
+- **Go Only**: Currently analyzes Go codebases only
+- **Local Analysis**: Does not integrate with Git history (planned for v2.0)
+- **Single Repository**: Analyzes one repository at a time
+
+Some possible v2.0 features include:
+- Git history integration and code churn detection
+- Multi-repository analysis
+- Custom rules engine with plugin support
+- HTML dashboard with interactive visualizations
 
 ## Contributing
 
