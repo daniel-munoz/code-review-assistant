@@ -8,6 +8,7 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/comparison"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
+	"github.com/daniel-munoz/code-review-assistant/internal/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +30,7 @@ func (m *mockParser) ParseFile(filePath string) (*parser.FileMetrics, error) {
 	return nil, errors.New("no metrics or errors configured")
 }
 
-func (m *mockParser) ParseDirectory(dirPath string, excludePatterns []string) ([]*parser.FileMetrics, []error) {
+func (m *mockParser) ParseDirectory(dirPath string, excludePatterns []string, statusReporter status.Reporter) ([]*parser.FileMetrics, []error) {
 	return m.metrics, m.errors
 }
 
@@ -116,6 +117,7 @@ func TestRun_SuccessCase(t *testing.T) {
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
+		status:   status.NewSilentReporter(),
 	}
 
 	err := orch.Run("/test/path")
@@ -140,6 +142,7 @@ func TestRun_NoFilesFound(t *testing.T) {
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
+		status:   status.NewSilentReporter(),
 	}
 
 	err := orch.Run("/empty/path")
@@ -183,6 +186,7 @@ func TestRun_ParseErrors(t *testing.T) {
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
+		status:   status.NewSilentReporter(),
 	}
 
 	// Should succeed despite parse errors (continues with successfully parsed files)
@@ -221,6 +225,7 @@ func TestRun_ManyParseErrors(t *testing.T) {
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
+		status:   status.NewSilentReporter(),
 	}
 
 	err := orch.Run("/test/path")
@@ -249,6 +254,7 @@ func TestRun_AnalyzerFailure(t *testing.T) {
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
+		status:   status.NewSilentReporter(),
 	}
 
 	err := orch.Run("/test/path")
@@ -281,6 +287,7 @@ func TestRun_ReporterFailure(t *testing.T) {
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
+		status:   status.NewSilentReporter(),
 	}
 
 	err := orch.Run("/test/path")
@@ -310,6 +317,7 @@ func TestRun_ExcludePatterns(t *testing.T) {
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
+		status:   status.NewSilentReporter(),
 	}
 
 	err := orch.Run("/test/path")
@@ -342,6 +350,7 @@ func TestRun_IntegrationFlow(t *testing.T) {
 			parser:   mp,
 			analyzer: ma,
 			reporter: mr,
+			status:   status.NewSilentReporter(),
 		}
 
 		err := orch.Run("/test/path")
