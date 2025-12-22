@@ -11,6 +11,7 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/git"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/reporter"
+	"github.com/daniel-munoz/code-review-assistant/internal/status"
 	"github.com/daniel-munoz/code-review-assistant/internal/storage"
 	"github.com/google/uuid"
 )
@@ -32,8 +33,9 @@ type Orchestrator struct {
 	parser     parser.Parser
 	analyzer   analyzer.Analyzer
 	reporter   reporter.Reporter
-	storage    storage.Storage    // Phase 3: Persistent storage (optional)
-	comparator *comparison.Comparator // Phase 3: Historical comparison (optional)
+	storage    storage.Storage         // Phase 3: Persistent storage (optional)
+	comparator *comparison.Comparator  // Phase 3: Historical comparison (optional)
+	status     status.Reporter         // Live status reporting
 }
 
 // New creates a new Orchestrator with the given configuration.
@@ -47,11 +49,14 @@ type Orchestrator struct {
 //
 // Returns an error if component creation fails.
 func New(cfg *config.Config) (*Orchestrator, error) {
+	// Create status reporter (needed by analyzer and parser)
+	statusReporter := status.NewReporter(&cfg.Output)
+
 	// Create parser
 	p := parser.NewParser()
 
 	// Create analyzer
-	a := analyzer.NewAnalyzer(&cfg.Analysis)
+	a := analyzer.NewAnalyzer(&cfg.Analysis, statusReporter)
 
 	// Create reporter
 	r, err := reporter.NewReporter(&cfg.Output)
@@ -81,6 +86,7 @@ func New(cfg *config.Config) (*Orchestrator, error) {
 		reporter:   r,
 		storage:    store,
 		comparator: comp,
+		status:     statusReporter,
 	}, nil
 }
 
@@ -152,10 +158,18 @@ func createStorage(cfg *config.StorageConfig) (storage.Storage, error) {
 func (o *Orchestrator) Run(targetPath string) error {
 	ctx := context.Background()
 
-	// Load previous report for comparison
+	// Start status reporting
+	o.status.Start()
+	defer o.status.Stop()
+
+	// Stage 1: Load previous report for comparison
+	if o.storage != nil && o.comparator != nil {
+		o.status.Update("[LOAD] Loading previous report...")
+	}
 	previousReport, previousTimestamp := o.loadPreviousReport(ctx, targetPath)
 
-	// Parse and validate files
+	// Stage 2: Parse and validate files
+	o.status.Update("[PARSE] Discovering Go files...")
 	fileMetrics, parseErrors := o.parseAndValidate(targetPath)
 	o.reportParseErrors(parseErrors)
 
@@ -163,19 +177,25 @@ func (o *Orchestrator) Run(targetPath string) error {
 		return fmt.Errorf("no Go files found to analyze in %s", targetPath)
 	}
 
-	// Analyze the parsed metrics
+	// Stage 3: Analyze the parsed metrics (status reporting delegated to analyzer)
 	result, err := o.analyzer.Analyze(targetPath, fileMetrics)
 	if err != nil {
 		return fmt.Errorf("analysis failed: %w", err)
 	}
 
-	// Run comparison and generate report
+	// Stage 4: Run comparison if enabled
+	if previousReport != nil {
+		o.status.Update("[COMPARE] Comparing with previous report...")
+	}
 	comparisonResult := o.runComparison(result, previousReport, previousTimestamp)
+
+	// Stage 5: Generate report (clear status before output)
+	o.status.Clear()
 	if err := o.reporter.Report(result, comparisonResult); err != nil {
 		return fmt.Errorf("failed to generate report: %w", err)
 	}
 
-	// Save report to storage (non-fatal)
+	// Stage 6: Save report to storage (non-fatal)
 	o.saveReportIfEnabled(ctx, targetPath, result)
 
 	return nil
@@ -197,7 +217,7 @@ func (o *Orchestrator) loadPreviousReport(ctx context.Context, targetPath string
 
 // parseAndValidate parses all Go files in the target path
 func (o *Orchestrator) parseAndValidate(targetPath string) ([]*parser.FileMetrics, []error) {
-	return o.parser.ParseDirectory(targetPath, o.config.Analysis.ExcludePatterns)
+	return o.parser.ParseDirectory(targetPath, o.config.Analysis.ExcludePatterns, o.status)
 }
 
 // reportParseErrors reports parsing errors to the user (max 5 errors shown)

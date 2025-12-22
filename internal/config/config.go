@@ -69,11 +69,15 @@ type AnalysisConfig struct {
 // Verbose enables detailed per-file and per-package reporting.
 // OutputFile specifies a file path for output (empty means stdout).
 // JSONPretty controls JSON formatting (pretty vs compact).
+// QuietMode disables live status reporting.
+// ShowStatus forces status reporting even when output is piped.
 type OutputConfig struct {
 	Format     string `mapstructure:"format"`
 	Verbose    bool   `mapstructure:"verbose"`
 	OutputFile string `mapstructure:"output_file"` // Phase 3: File output path
 	JSONPretty bool   `mapstructure:"json_pretty"` // Phase 3: Pretty-print JSON
+	QuietMode  bool   `mapstructure:"quiet"`       // Disable live status reporting
+	ShowStatus bool   `mapstructure:"show_status"` // Force enable status reporting
 }
 
 // StorageConfig contains settings for persistent storage of analysis reports.
@@ -139,6 +143,8 @@ func Default() *Config {
 			Verbose:    false,
 			OutputFile: "",    // Phase 3: Default to stdout
 			JSONPretty: true,  // Phase 3: Pretty-print by default
+			QuietMode:  false, // Enable status by default
+			ShowStatus: false, // Auto-detect TTY by default
 		},
 		Storage: StorageConfig{
 			Enabled:     false, // Phase 3: Opt-in
@@ -199,6 +205,8 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("output.verbose", defaults.Output.Verbose)
 	v.SetDefault("output.output_file", defaults.Output.OutputFile)
 	v.SetDefault("output.json_pretty", defaults.Output.JSONPretty)
+	v.SetDefault("output.quiet", defaults.Output.QuietMode)
+	v.SetDefault("output.show_status", defaults.Output.ShowStatus)
 	v.SetDefault("storage.enabled", defaults.Storage.Enabled)
 	v.SetDefault("storage.backend", defaults.Storage.Backend)
 	v.SetDefault("storage.path", defaults.Storage.Path)
@@ -312,6 +320,8 @@ func (c *Config) mergeOutputSettings(overrides map[string]interface{}) {
 	mergeBool(&c.Output.Verbose, overrides, "verbose")
 	mergeStringIfNonEmpty(&c.Output.OutputFile, overrides, "output_file")
 	mergeBool(&c.Output.JSONPretty, overrides, "json_pretty")
+	mergeBool(&c.Output.QuietMode, overrides, "quiet")
+	mergeBool(&c.Output.ShowStatus, overrides, "show_status")
 }
 
 // mergeStorageSettings merges Phase 3 storage settings

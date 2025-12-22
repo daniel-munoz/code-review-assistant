@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
 
 // Parser defines the interface for parsing Go source files and extracting metrics.
@@ -31,13 +33,15 @@ type Parser interface {
 	// Discovers and parses all .go files under the specified path, excluding
 	// files and directories matching the excludePatterns (glob patterns).
 	//
+	// The statusReporter parameter is used to report parsing progress.
+	//
 	// This method is fault-tolerant: parse errors for individual files are
 	// collected but don't stop processing. Returns:
 	//   - metrics: FileMetrics for all successfully parsed files
 	//   - errors: parse errors for files that failed (empty if all succeeded)
 	//
 	// Common exclude patterns: vendor/**, **/*_test.go, **/testdata/**
-	ParseDirectory(path string, excludePatterns []string) ([]*FileMetrics, []error)
+	ParseDirectory(path string, excludePatterns []string, statusReporter status.Reporter) ([]*FileMetrics, []error)
 }
 
 // ASTParser implements Parser using Go's AST (Abstract Syntax Tree) packages.
@@ -89,9 +93,13 @@ func (p *ASTParser) ParseFile(path string) (*FileMetrics, error) {
 //   - Returns metrics for all successfully parsed files
 //
 // The excludePatterns are matched against paths relative to rootPath.
-func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string) ([]*FileMetrics, []error) {
+func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string, statusReporter status.Reporter) ([]*FileMetrics, []error) {
 	var allMetrics []*FileMetrics
 	var errors []error
+	var fileCount int
+
+	// Initial status
+	statusReporter.Update("[PARSE] Discovering Go files...")
 
 	// Walk the directory tree
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
@@ -118,6 +126,11 @@ func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string) ([
 		if shouldExclude(path, rootPath, excludePatterns) {
 			return nil
 		}
+
+		// Increment file count and update progress
+		fileCount++
+		baseName := filepath.Base(path)
+		statusReporter.UpdateProgress("[PARSE] Parsing files", len(allMetrics)+1, fileCount, baseName)
 
 		// Parse the file
 		metrics, parseErr := p.ParseFile(path)

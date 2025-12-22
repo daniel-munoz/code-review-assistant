@@ -31,6 +31,10 @@ var (
 	compareReport   bool
 	storageBackend  string
 	storagePath     string
+
+	// Live status flags
+	quietMode  bool
+	showStatus bool
 )
 
 // analyzeCmd represents the analyze command
@@ -75,6 +79,10 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&compareReport, "compare", false, "compare with previous report from storage")
 	analyzeCmd.Flags().StringVar(&storageBackend, "storage-backend", "file", "storage backend: file or sqlite")
 	analyzeCmd.Flags().StringVar(&storagePath, "storage-path", "", "custom storage path (default: ~/.cra)")
+
+	// Live status flags
+	analyzeCmd.Flags().BoolVarP(&quietMode, "quiet", "q", false, "disable live status reporting")
+	analyzeCmd.Flags().BoolVar(&showStatus, "show-status", false, "force enable status reporting (even when piped)")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
@@ -191,6 +199,12 @@ func addOutputOverrides(overrides map[string]interface{}) {
 	}
 	if IsVerbose() {
 		overrides["verbose"] = true
+	}
+	if quietMode {
+		overrides["quiet"] = true
+	}
+	if showStatus {
+		overrides["show_status"] = true
 	}
 }
 
