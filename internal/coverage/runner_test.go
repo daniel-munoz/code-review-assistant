@@ -4,27 +4,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daniel-munoz/code-review-assistant/internal/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewRunner(t *testing.T) {
 	t.Run("creates runner with default timeout", func(t *testing.T) {
-		runner := NewRunner(30)
+		runner := NewRunner(30, status.NewSilentReporter())
 
 		require.NotNil(t, runner, "runner should not be nil")
 		assert.Equal(t, 30*time.Second, runner.timeout, "timeout should be set correctly")
 	})
 
 	t.Run("creates runner with custom timeout", func(t *testing.T) {
-		runner := NewRunner(60)
+		runner := NewRunner(60, status.NewSilentReporter())
 
 		require.NotNil(t, runner, "runner should not be nil")
 		assert.Equal(t, 60*time.Second, runner.timeout, "timeout should be set to 60 seconds")
 	})
 
 	t.Run("creates runner with zero timeout", func(t *testing.T) {
-		runner := NewRunner(0)
+		runner := NewRunner(0, status.NewSilentReporter())
 
 		require.NotNil(t, runner, "runner should not be nil")
 		assert.Equal(t, time.Duration(0), runner.timeout, "timeout should be zero")
@@ -32,7 +33,7 @@ func TestNewRunner(t *testing.T) {
 }
 
 func TestParseCoverage(t *testing.T) {
-	runner := NewRunner(30)
+	runner := NewRunner(30, status.NewSilentReporter())
 
 	testCases := []struct {
 		name        string
@@ -102,7 +103,7 @@ func TestParseCoverage(t *testing.T) {
 }
 
 func TestShouldExclude(t *testing.T) {
-	runner := NewRunner(30)
+	runner := NewRunner(30, status.NewSilentReporter())
 
 	testCases := []struct {
 		name     string
@@ -154,7 +155,7 @@ func TestRunCoverage_Integration(t *testing.T) {
 	t.Skip("Skipping integration test - runs actual go test which can hang test suite")
 
 	t.Run("runs coverage on current package", func(t *testing.T) {
-		runner := NewRunner(60)
+		runner := NewRunner(60, status.NewSilentReporter())
 
 		// Run coverage on the current working directory (which should have this test)
 		results, err := runner.RunCoverage(".", []string{})
@@ -223,7 +224,7 @@ func TestRunCoverage_RealProject(t *testing.T) {
 	t.Skip("Skipping integration test - runs actual go test which can hang test suite")
 
 	t.Run("runs coverage on project root", func(t *testing.T) {
-		runner := NewRunner(120) // Longer timeout for full project
+		runner := NewRunner(120, status.NewSilentReporter()) // Longer timeout for full project
 
 		// Run coverage on the project root (two levels up from this package)
 		results, err := runner.RunCoverage("../..", []string{})
@@ -256,7 +257,7 @@ func TestRunCoverage_RealProject(t *testing.T) {
 }
 
 func TestParseCoverage_EdgeCases(t *testing.T) {
-	runner := NewRunner(30)
+	runner := NewRunner(30, status.NewSilentReporter())
 
 	t.Run("handles very high precision coverage", func(t *testing.T) {
 		output := "coverage: 99.99999% of statements"
@@ -286,13 +287,13 @@ func TestParseCoverage_EdgeCases(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	t.Run("runner respects timeout setting", func(t *testing.T) {
 		// Create runner with very short timeout
-		runner := NewRunner(1)
+		runner := NewRunner(1, status.NewSilentReporter())
 
 		assert.Equal(t, 1*time.Second, runner.timeout, "timeout should be 1 second")
 	})
 
 	t.Run("runner with large timeout", func(t *testing.T) {
-		runner := NewRunner(300)
+		runner := NewRunner(300, status.NewSilentReporter())
 
 		assert.Equal(t, 300*time.Second, runner.timeout, "timeout should be 5 minutes")
 	})
@@ -300,7 +301,7 @@ func TestTimeout(t *testing.T) {
 
 func TestRunCoverage_ErrorHandling(t *testing.T) {
 	t.Run("handles nonexistent project path", func(t *testing.T) {
-		runner := NewRunner(30)
+		runner := NewRunner(30, status.NewSilentReporter())
 
 		results, err := runner.RunCoverage("/nonexistent/path/12345", []string{})
 
@@ -314,7 +315,7 @@ func TestRunCoverage_ErrorHandling(t *testing.T) {
 			t.Skip("Skipping slow integration test in short mode")
 		}
 
-		runner := NewRunner(30)
+		runner := NewRunner(30, status.NewSilentReporter())
 
 		// Empty path will default to current directory which should work
 		results, err := runner.RunCoverage(".", []string{})
@@ -329,7 +330,7 @@ func TestRunCoverage_ErrorHandling(t *testing.T) {
 }
 
 func TestFindPackages_ExcludePatterns(t *testing.T) {
-	runner := NewRunner(30)
+	runner := NewRunner(30, status.NewSilentReporter())
 
 	t.Run("excludes testdata packages by default", func(t *testing.T) {
 		// Test that shouldExclude correctly identifies testdata packages
@@ -376,7 +377,7 @@ func TestRunPackageCoverage_ErrorScenarios(t *testing.T) {
 		t.Skip("Skipping slow integration tests in short mode")
 	}
 
-	runner := NewRunner(30)
+	runner := NewRunner(30, status.NewSilentReporter())
 
 	t.Run("handles package with no test files", func(t *testing.T) {
 		// This will actually execute go test, so we need a real package
@@ -404,7 +405,7 @@ func TestRunPackageCoverage_ErrorScenarios(t *testing.T) {
 }
 
 func TestParseCoverage_DetailedEdgeCases(t *testing.T) {
-	runner := NewRunner(30)
+	runner := NewRunner(30, status.NewSilentReporter())
 
 	t.Run("handles coverage at boundaries", func(t *testing.T) {
 		testCases := []struct {
@@ -559,7 +560,7 @@ func TestRunner_Timeout(t *testing.T) {
 		}
 
 		for _, tc := range testCases {
-			runner := NewRunner(tc.seconds)
+			runner := NewRunner(tc.seconds, status.NewSilentReporter())
 			assert.Equal(t, tc.expected, runner.timeout, "timeout for %d seconds", tc.seconds)
 		}
 	})
