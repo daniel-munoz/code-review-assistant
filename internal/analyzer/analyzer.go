@@ -12,6 +12,7 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/coverage"
 	"github.com/daniel-munoz/code-review-assistant/internal/dependencies"
 	parserPkg "github.com/daniel-munoz/code-review-assistant/internal/parser"
+	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
 
 // Analyzer defines the interface for analyzing parsed code metrics
@@ -22,19 +23,20 @@ type Analyzer interface {
 
 // MetricsAnalyzer implements Analyzer for basic metrics analysis
 type MetricsAnalyzer struct {
-	config            *config.AnalysisConfig
-	detectors         *detectors.Registry
-	coverageRunner    *coverage.Runner
-	dependencyAnalyzer *dependencies.Analyzer
-	projectPath       string
+	config         *config.AnalysisConfig
+	detectors      *detectors.Registry
+	coverageRunner *coverage.Runner
+	status         status.Reporter
+	projectPath    string
 }
 
-// NewAnalyzer creates a new MetricsAnalyzer with the given configuration
-func NewAnalyzer(cfg *config.AnalysisConfig) Analyzer {
+// NewAnalyzer creates a new MetricsAnalyzer with the given configuration and status reporter
+func NewAnalyzer(cfg *config.AnalysisConfig, statusReporter status.Reporter) Analyzer {
 	return &MetricsAnalyzer{
 		config:         cfg,
 		detectors:      detectors.NewRegistry(cfg),
-		coverageRunner: coverage.NewRunner(cfg.CoverageTimeout),
+		coverageRunner: coverage.NewRunner(cfg.CoverageTimeout, statusReporter),
+		status:         statusReporter,
 	}
 }
 
@@ -79,9 +81,11 @@ func (ma *MetricsAnalyzer) Analyze(projectPath string, metrics []*parserPkg.File
 	}
 
 	// Process all files and collect function metrics
+	ma.status.Update("[ANALYZE] Processing files...")
 	allFunctions := ma.processAllFiles(result, metrics)
 
 	// Calculate aggregate metrics
+	ma.status.Update("[ANALYZE] Calculating metrics...")
 	result.Metrics = calculateAggregateMetrics(metrics, allFunctions)
 
 	// Check overall code quality
@@ -210,6 +214,7 @@ func (ma *MetricsAnalyzer) runCoverageIfEnabled(projectPath string, result *Anal
 
 // runDependencyAnalysis runs dependency analysis if possible
 func (ma *MetricsAnalyzer) runDependencyAnalysis(projectPath string, metrics []*parserPkg.FileMetrics, result *AnalysisResult) {
+	ma.status.Update("[ANALYZE] Analyzing dependencies...")
 	depAnalyzer, err := dependencies.NewAnalyzer(projectPath)
 	if err != nil {
 		fmt.Printf("Warning: Dependency analysis failed: %v\n", err)

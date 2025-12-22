@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
 
 // PackageCoverage represents coverage data for a single package
@@ -24,12 +26,14 @@ type PackageCoverage struct {
 // Runner executes go test -cover for packages
 type Runner struct {
 	timeout time.Duration
+	status  status.Reporter
 }
 
 // NewRunner creates a new coverage runner
-func NewRunner(timeoutSeconds int) *Runner {
+func NewRunner(timeoutSeconds int, statusReporter status.Reporter) *Runner {
 	return &Runner{
 		timeout: time.Duration(timeoutSeconds) * time.Second,
+		status:  statusReporter,
 	}
 }
 
@@ -41,10 +45,12 @@ func (r *Runner) RunCoverage(projectPath string, excludePatterns []string) ([]*P
 		return nil, fmt.Errorf("failed to find packages: %w", err)
 	}
 
+	total := len(packages)
 	var results []*PackageCoverage
 
-	// Run coverage for each package
-	for _, pkg := range packages {
+	// Run coverage for each package with progress reporting
+	for i, pkg := range packages {
+		r.status.UpdateProgress("[COVERAGE] Running tests", i+1, total, pkg)
 		coverage := r.runPackageCoverage(pkg)
 		results = append(results, coverage)
 	}
