@@ -53,11 +53,11 @@ func (mr *MarkdownReporter) Report(result *analyzer.AnalysisResult, comp *compar
 
 	mr.writeSummary(result)
 	mr.writeAggregateMetrics(result.Metrics)
-	mr.writeIssues(result.Issues)
 	mr.writeLargestFiles(result.Metrics.LargestFiles)
 	mr.writeMostComplexFunctions(result.Metrics.MostComplexFunctions)
 	mr.writeCoverageReport(result.Coverage)
 	mr.writeDependencyReport(result.Dependencies)
+	mr.writeIssues(result.Issues)
 
 	// Phase 3: Add detailed comparison if available and verbose
 	if comp != nil && mr.config.Verbose {
