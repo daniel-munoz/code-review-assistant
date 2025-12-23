@@ -96,7 +96,7 @@ func (a *Analyzer) categorizeImport(importPath string) string {
 	// Internal packages start with the module name - check FIRST!
 	// This must come before isStdlib() because module names without dots
 	// (like "app") would be incorrectly classified as stdlib
-	if a.moduleName != "" && strings.HasPrefix(importPath, a.moduleName) {
+	if a.moduleName != "" && (importPath == a.moduleName || strings.HasPrefix(importPath, a.moduleName+"/")) {
 		return "internal"
 	}
 

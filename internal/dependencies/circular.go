@@ -56,7 +56,8 @@ func (a *Analyzer) getImportPathForFile(file *parser.FileMetrics) string {
 	}
 
 	// Get the directory containing the file
-	fileDir := filepath.Dir(file.FilePath)
+	cleanPath := filepath.Clean(file.FilePath)
+	fileDir := filepath.Dir(cleanPath)
 
 	// Get the relative path from project root to the file's directory
 	relPath, err := filepath.Rel(a.projectPath, fileDir)
