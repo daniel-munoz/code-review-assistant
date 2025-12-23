@@ -61,8 +61,8 @@ func (a *Analyzer) getImportPathForFile(file *parser.FileMetrics) string {
 	// Get the relative path from project root to the file's directory
 	relPath, err := filepath.Rel(a.projectPath, fileDir)
 	if err != nil {
-		// If we can't get a relative path, fall back to using just the directory name
-		return filepath.Base(fileDir)
+		// If we can't get a relative path, skip this file to avoid incorrect import paths
+		return ""
 	}
 
 	// If the file is in the project root, use just the module name

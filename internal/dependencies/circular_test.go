@@ -56,7 +56,9 @@ func TestDetectCircularDependencies(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, cycles, 1, "should detect one cycle")
-		// Now checks for full import paths
+		// Now checks for full import paths instead of just package names, ensuring packages are
+		// identified by their full import path to prevent false positives when multiple directories
+		// share the same package name.
 		assert.Contains(t, cycles[0].Cycle, "github.com/daniel-munoz/code-review-assistant/internal/pkg1")
 		assert.Contains(t, cycles[0].Cycle, "github.com/daniel-munoz/code-review-assistant/internal/pkg2")
 	})
