@@ -15,12 +15,14 @@ func TestDetectCircularDependencies(t *testing.T) {
 	t.Run("detects no cycles in acyclic graph", func(t *testing.T) {
 		files := []*parser.FileMetrics{
 			{
+				FilePath:    "../../main.go",
 				PackageName: "main",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/config",
 				},
 			},
 			{
+				FilePath:    "../../internal/config/config.go",
 				PackageName: "config",
 				Imports:     []string{"fmt"}, // stdlib only
 			},
@@ -35,12 +37,14 @@ func TestDetectCircularDependencies(t *testing.T) {
 	t.Run("detects simple 2-package cycle", func(t *testing.T) {
 		files := []*parser.FileMetrics{
 			{
+				FilePath:    "../../internal/pkg1/file.go",
 				PackageName: "pkg1",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg2",
 				},
 			},
 			{
+				FilePath:    "../../internal/pkg2/file.go",
 				PackageName: "pkg2",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg1",
@@ -52,25 +56,31 @@ func TestDetectCircularDependencies(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, cycles, 1, "should detect one cycle")
-		assert.Contains(t, cycles[0].Cycle, "pkg1")
-		assert.Contains(t, cycles[0].Cycle, "pkg2")
+		// Now checks for full import paths instead of just package names, ensuring packages are
+		// identified by their full import path to prevent false positives when multiple directories
+		// share the same package name.
+		assert.Contains(t, cycles[0].Cycle, "github.com/daniel-munoz/code-review-assistant/internal/pkg1")
+		assert.Contains(t, cycles[0].Cycle, "github.com/daniel-munoz/code-review-assistant/internal/pkg2")
 	})
 
 	t.Run("detects 3-package cycle", func(t *testing.T) {
 		files := []*parser.FileMetrics{
 			{
+				FilePath:    "../../internal/pkg1/file.go",
 				PackageName: "pkg1",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg2",
 				},
 			},
 			{
+				FilePath:    "../../internal/pkg2/file.go",
 				PackageName: "pkg2",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg3",
 				},
 			},
 			{
+				FilePath:    "../../internal/pkg3/file.go",
 				PackageName: "pkg3",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg1",
@@ -83,14 +93,15 @@ func TestDetectCircularDependencies(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, cycles, 1, "should detect one cycle")
 		assert.Len(t, cycles[0].Cycle, 4, "cycle should have 4 elements (including closing)")
-		assert.Contains(t, cycles[0].Cycle, "pkg1")
-		assert.Contains(t, cycles[0].Cycle, "pkg2")
-		assert.Contains(t, cycles[0].Cycle, "pkg3")
+		assert.Contains(t, cycles[0].Cycle, "github.com/daniel-munoz/code-review-assistant/internal/pkg1")
+		assert.Contains(t, cycles[0].Cycle, "github.com/daniel-munoz/code-review-assistant/internal/pkg2")
+		assert.Contains(t, cycles[0].Cycle, "github.com/daniel-munoz/code-review-assistant/internal/pkg3")
 	})
 
 	t.Run("handles self-cycle", func(t *testing.T) {
 		files := []*parser.FileMetrics{
 			{
+				FilePath:    "../../internal/pkg1/file.go",
 				PackageName: "pkg1",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg1",
@@ -108,6 +119,7 @@ func TestDetectCircularDependencies(t *testing.T) {
 	t.Run("ignores stdlib and external dependencies", func(t *testing.T) {
 		files := []*parser.FileMetrics{
 			{
+				FilePath:    "../../internal/pkg1/file.go",
 				PackageName: "pkg1",
 				Imports: []string{
 					"fmt",                       // stdlib - ignored
@@ -116,6 +128,7 @@ func TestDetectCircularDependencies(t *testing.T) {
 				},
 			},
 			{
+				FilePath:    "../../internal/pkg2/file.go",
 				PackageName: "pkg2",
 				Imports: []string{
 					"os",                        // stdlib - ignored
@@ -142,6 +155,7 @@ func TestDetectCircularDependencies(t *testing.T) {
 	t.Run("handles package with no imports", func(t *testing.T) {
 		files := []*parser.FileMetrics{
 			{
+				FilePath:    "../../standalone/file.go",
 				PackageName: "standalone",
 				Imports:     []string{},
 			},
@@ -157,18 +171,21 @@ func TestDetectCircularDependencies(t *testing.T) {
 		// Two files in pkg1, both importing pkg2
 		files := []*parser.FileMetrics{
 			{
+				FilePath:    "../../internal/pkg1/file1.go",
 				PackageName: "pkg1",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg2",
 				},
 			},
 			{
+				FilePath:    "../../internal/pkg1/file2.go",
 				PackageName: "pkg1", // Same package, different file
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg2",
 				},
 			},
 			{
+				FilePath:    "../../internal/pkg2/file.go",
 				PackageName: "pkg2",
 				Imports: []string{
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg1",

@@ -21,7 +21,8 @@ type PackageDependencies struct {
 
 // Analyzer analyzes package dependencies
 type Analyzer struct {
-	moduleName string
+	moduleName  string
+	projectPath string
 }
 
 // NewAnalyzer creates a new dependency analyzer
@@ -31,8 +32,12 @@ func NewAnalyzer(projectPath string) (*Analyzer, error) {
 		return nil, fmt.Errorf("failed to get module name: %w", err)
 	}
 
+	// Clean the project path to ensure consistency
+	cleanPath := filepath.Clean(projectPath)
+
 	return &Analyzer{
-		moduleName: moduleName,
+		moduleName:  moduleName,
+		projectPath: cleanPath,
 	}, nil
 }
 
@@ -88,15 +93,17 @@ func (a *Analyzer) Analyze(files []*parser.FileMetrics) ([]*PackageDependencies,
 
 // categorizeImport determines if an import is stdlib, internal, or external
 func (a *Analyzer) categorizeImport(importPath string) string {
+	// Internal packages start with the module name - check FIRST!
+	// This must come before isStdlib() because module names without dots
+	// (like "app") would be incorrectly classified as stdlib
+	if a.moduleName != "" && (importPath == a.moduleName || strings.HasPrefix(importPath, a.moduleName+"/")) {
+		return "internal"
+	}
+
 	// Stdlib packages don't have dots in the first path component
 	// and are in the standard library
 	if isStdlib(importPath) {
 		return "stdlib"
-	}
-
-	// Internal packages start with the module name
-	if strings.HasPrefix(importPath, a.moduleName) {
-		return "internal"
 	}
 
 	return "external"
