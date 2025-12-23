@@ -1,6 +1,7 @@
 package dependencies
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
@@ -20,40 +21,70 @@ func (a *Analyzer) DetectCircularDependencies(files []*parser.FileMetrics) ([]*C
 
 // buildDependencyGraph creates a graph of internal package dependencies
 func (a *Analyzer) buildDependencyGraph(files []*parser.FileMetrics) map[string][]string {
-	// Group files by package
-	packageFiles := groupFilesByPackage(files)
+	// Group files by package import path (not package name!)
+	packageFiles := a.groupFilesByImportPath(files)
 
 	// Build graph of internal dependencies only
 	graph := make(map[string][]string)
-	for pkgName, pkgFiles := range packageFiles {
+	for importPath, pkgFiles := range packageFiles {
 		imports := a.extractInternalImports(pkgFiles)
-		graph[pkgName] = imports
+		graph[importPath] = imports
 	}
 
 	return graph
 }
 
-// groupFilesByPackage groups files by their package name
-func groupFilesByPackage(files []*parser.FileMetrics) map[string][]*parser.FileMetrics {
+// groupFilesByImportPath groups files by their import path
+// This is critical - we must use import paths, not package names,
+// because multiple directories can have the same package name
+func (a *Analyzer) groupFilesByImportPath(files []*parser.FileMetrics) map[string][]*parser.FileMetrics {
 	packageFiles := make(map[string][]*parser.FileMetrics)
 	for _, file := range files {
-		packageFiles[file.PackageName] = append(packageFiles[file.PackageName], file)
+		importPath := a.getImportPathForFile(file)
+		if importPath != "" {
+			packageFiles[importPath] = append(packageFiles[importPath], file)
+		}
 	}
 	return packageFiles
 }
 
+// getImportPathForFile derives the import path from a file's path
+func (a *Analyzer) getImportPathForFile(file *parser.FileMetrics) string {
+	// If no module name, we can't determine import paths
+	if a.moduleName == "" {
+		return ""
+	}
+
+	// Get the directory containing the file
+	fileDir := filepath.Dir(file.FilePath)
+
+	// Get the relative path from project root to the file's directory
+	relPath, err := filepath.Rel(a.projectPath, fileDir)
+	if err != nil {
+		// If we can't get a relative path, fall back to using just the directory name
+		return filepath.Base(fileDir)
+	}
+
+	// If the file is in the project root, use just the module name
+	if relPath == "." {
+		return a.moduleName
+	}
+
+	// Otherwise, combine module name with the relative path
+	// Convert path separators to forward slashes for import paths
+	relPath = filepath.ToSlash(relPath)
+	return a.moduleName + "/" + relPath
+}
+
 // extractInternalImports extracts unique internal package imports from files
+// Returns the full import paths, not just the last component
 func (a *Analyzer) extractInternalImports(files []*parser.FileMetrics) []string {
 	importSet := make(map[string]bool)
 	for _, file := range files {
 		for _, imp := range file.Imports {
 			if a.categorizeImport(imp) == "internal" {
-				// Extract package name from import path
-				parts := strings.Split(imp, "/")
-				if len(parts) > 0 {
-					importedPkg := parts[len(parts)-1]
-					importSet[importedPkg] = true
-				}
+				// Use the full import path, not just the last component
+				importSet[imp] = true
 			}
 		}
 	}
