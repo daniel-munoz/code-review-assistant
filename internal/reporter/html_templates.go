@@ -602,6 +602,16 @@ const htmlTemplate = `<!DOCTYPE html>
                 </div>
             </div>
             {{end}}
+
+            {{if .ChartData.DependencyGraph}}
+            <div style="margin-top: 2rem;">
+                <h3 class="chart-title">🔗 Dependency Graph</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Interactive package dependency visualization. Circular dependencies highlighted in red.
+                </p>
+                <div id="dependencyGraph" style="width: 100%; height: 600px; background: var(--bg); border-radius: 0.5rem;"></div>
+            </div>
+            {{end}}
         </div>
         {{end}}
 
@@ -844,6 +854,9 @@ const htmlTemplate = `<!DOCTYPE html>
 
     {{if .ChartData}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    {{if .ChartData.DependencyGraph}}
+    <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+    {{end}}
     <script>
         // Chart.js initialization
         const chartData = {{.ChartDataJSON}};
@@ -1010,6 +1023,93 @@ const htmlTemplate = `<!DOCTYPE html>
                         }
                     }
                 }
+            });
+        }
+        {{end}}
+
+        // Dependency Graph Visualization
+        {{if .ChartData.DependencyGraph}}
+        const graphContainer = document.getElementById('dependencyGraph');
+        if (graphContainer && chartData.dependencyGraph) {
+            // Prepare nodes with styling
+            const nodes = new vis.DataSet(chartData.dependencyGraph.nodes.map(node => ({
+                id: node.id,
+                label: node.label,
+                title: node.title,
+                value: node.value,
+                color: node.group === 'internal' ? '#10b981' : node.group === 'external' ? '#f59e0b' : '#3b82f6',
+                font: { color: '#111827' }
+            })));
+
+            // Prepare edges with styling
+            const edges = new vis.DataSet(chartData.dependencyGraph.edges.map(edge => ({
+                from: edge.from,
+                to: edge.to,
+                arrows: 'to',
+                color: edge.color || { color: '#9ca3af', highlight: '#6b7280' },
+                width: edge.width || 1,
+                smooth: { type: 'cubicBezier' }
+            })));
+
+            const data = { nodes, edges };
+
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 15,
+                    font: {
+                        size: 12,
+                        face: 'Arial',
+                        color: '#111827'
+                    },
+                    borderWidth: 2,
+                    borderWidthSelected: 4
+                },
+                edges: {
+                    smooth: {
+                        type: 'cubicBezier',
+                        forceDirection: 'horizontal',
+                        roundness: 0.4
+                    }
+                },
+                physics: {
+                    enabled: true,
+                    barnesHut: {
+                        gravitationalConstant: -3000,
+                        centralGravity: 0.3,
+                        springLength: 150,
+                        springConstant: 0.04,
+                        damping: 0.09,
+                        avoidOverlap: 0.5
+                    },
+                    stabilization: {
+                        enabled: true,
+                        iterations: 200,
+                        updateInterval: 25
+                    }
+                },
+                interaction: {
+                    hover: true,
+                    tooltipDelay: 100,
+                    zoomView: true,
+                    dragView: true
+                },
+                layout: {
+                    improvedLayout: true,
+                    hierarchical: false
+                }
+            };
+
+            const network = new vis.Network(graphContainer, data, options);
+
+            // Fit the network after stabilization
+            network.once('stabilizationIterationsDone', function() {
+                network.fit({
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
             });
         }
         {{end}}

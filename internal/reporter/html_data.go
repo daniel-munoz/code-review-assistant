@@ -12,6 +12,7 @@ type ChartData struct {
 	CoverageBreakdown *CoverageBreakdownData  `json:"coverageBreakdown"`
 	IssueCounts       *IssueCountData         `json:"issueCounts"`
 	Heatmap           []*HeatmapCell          `json:"heatmap"`
+	DependencyGraph   *DependencyGraphData    `json:"dependencyGraph"`
 }
 
 // ComplexityDistribution for histogram showing function complexity distribution
@@ -46,6 +47,29 @@ type HeatmapCell struct {
 	Size       int     `json:"size"`       // Relative size for grid (1-5)
 }
 
+// DependencyGraphData for network visualization
+type DependencyGraphData struct {
+	Nodes []GraphNode `json:"nodes"`
+	Edges []GraphEdge `json:"edges"`
+}
+
+// GraphNode represents a package in the dependency graph
+type GraphNode struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Group string `json:"group"` // "stdlib", "internal", "external"
+	Value int    `json:"value"` // Size based on import count
+	Title string `json:"title"` // Tooltip text
+}
+
+// GraphEdge represents a dependency relationship
+type GraphEdge struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Color string `json:"color,omitempty"` // Red for circular deps
+	Width int    `json:"width"`           // 1-3
+}
+
 // buildChartData transforms AnalysisResult into chart-ready data
 func buildChartData(result *analyzer.AnalysisResult) *ChartData {
 	if result == nil {
@@ -61,6 +85,11 @@ func buildChartData(result *analyzer.AnalysisResult) *ChartData {
 	// Only build coverage breakdown if coverage data exists
 	if result.Coverage != nil {
 		data.CoverageBreakdown = buildCoverageBreakdown(result.Coverage)
+	}
+
+	// Only build dependency graph if dependency data exists
+	if result.Dependencies != nil {
+		data.DependencyGraph = buildDependencyGraph(result.Dependencies)
 	}
 
 	return data
@@ -280,6 +309,115 @@ func getRelativeSize(loc int) int {
 	default:
 		return 5 // Large
 	}
+}
+
+// buildDependencyGraph creates network graph data from dependency analysis
+func buildDependencyGraph(deps *analyzer.DependencyReport) *DependencyGraphData {
+	if deps == nil || len(deps.Packages) == 0 {
+		return nil
+	}
+
+	graph := &DependencyGraphData{
+		Nodes: make([]GraphNode, 0),
+		Edges: make([]GraphEdge, 0),
+	}
+
+	nodeMap := make(map[string]bool)
+	circularEdges := make(map[string]bool)
+
+	// Build set of circular dependency edges for highlighting
+	for _, circular := range deps.CircularDependencies {
+		if len(circular.Cycle) < 2 {
+			continue
+		}
+		// Mark all edges in the circular chain
+		for i := 0; i < len(circular.Cycle)-1; i++ {
+			edgeKey := circular.Cycle[i] + "->" + circular.Cycle[i+1]
+			circularEdges[edgeKey] = true
+		}
+	}
+
+	// Create nodes for each package
+	for _, pkg := range deps.Packages {
+		if !nodeMap[pkg.PackageName] {
+			// Extract short label from full package path
+			label := pkg.PackageName
+			if idx := len(label) - 1; idx >= 0 {
+				for i := idx; i >= 0; i-- {
+					if label[i] == '/' {
+						label = label[i+1:]
+						break
+					}
+				}
+			}
+
+			// Determine group (for coloring)
+			group := "internal"
+			if len(pkg.ExternalImports) > 0 && len(pkg.InternalImports) == 0 {
+				group = "external"
+			}
+
+			// Create tooltip with details
+			title := pkg.PackageName + "\\n" +
+				"Total imports: " + formatNumber(pkg.TotalImports) + "\\n" +
+				"Internal: " + formatNumber(len(pkg.InternalImports)) + "\\n" +
+				"External: " + formatNumber(len(pkg.ExternalImports))
+
+			node := GraphNode{
+				ID:    pkg.PackageName,
+				Label: label,
+				Group: group,
+				Value: pkg.TotalImports,
+				Title: title,
+			}
+			graph.Nodes = append(graph.Nodes, node)
+			nodeMap[pkg.PackageName] = true
+		}
+
+		// Create edges for internal dependencies
+		for _, imp := range pkg.InternalImports {
+			// Add imported package as node if not exists
+			if !nodeMap[imp] {
+				label := imp
+				if idx := len(label) - 1; idx >= 0 {
+					for i := idx; i >= 0; i-- {
+						if label[i] == '/' {
+							label = label[i+1:]
+							break
+						}
+					}
+				}
+
+				node := GraphNode{
+					ID:    imp,
+					Label: label,
+					Group: "internal",
+					Value: 1,
+					Title: imp,
+				}
+				graph.Nodes = append(graph.Nodes, node)
+				nodeMap[imp] = true
+			}
+
+			// Create edge
+			edgeKey := pkg.PackageName + "->" + imp
+			edge := GraphEdge{
+				From:  pkg.PackageName,
+				To:    imp,
+				Width: 1,
+			}
+
+			// Highlight circular dependencies in red
+			if circularEdges[edgeKey] {
+				edge.Color = "#ef4444" // Red
+				edge.Width = 3
+			}
+
+			graph.Edges = append(graph.Edges, edge)
+		}
+	}
+
+	return graph
 }
 
 // toJSON converts ChartData to JSON string for embedding in HTML
