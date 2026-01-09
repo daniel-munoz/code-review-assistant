@@ -11,6 +11,7 @@ type ChartData struct {
 	ComplexityDist    *ComplexityDistribution `json:"complexityDist"`
 	CoverageBreakdown *CoverageBreakdownData  `json:"coverageBreakdown"`
 	IssueCounts       *IssueCountData         `json:"issueCounts"`
+	Heatmap           []*HeatmapCell          `json:"heatmap"`
 }
 
 // ComplexityDistribution for histogram showing function complexity distribution
@@ -34,6 +35,17 @@ type IssueCountData struct {
 	InfoCount  []int    `json:"infoCount"`  // Count of info per type
 }
 
+// HeatmapCell represents a single file in the complexity heatmap
+type HeatmapCell struct {
+	FilePath   string  `json:"filePath"`   // Relative file path
+	FileName   string  `json:"fileName"`   // Just the filename
+	Complexity float64 `json:"complexity"` // Average complexity
+	LOC        int     `json:"loc"`        // Lines of code
+	Functions  int     `json:"functions"`  // Number of functions
+	Color      string  `json:"color"`      // Color based on complexity
+	Size       int     `json:"size"`       // Relative size for grid (1-5)
+}
+
 // buildChartData transforms AnalysisResult into chart-ready data
 func buildChartData(result *analyzer.AnalysisResult) *ChartData {
 	if result == nil {
@@ -43,6 +55,7 @@ func buildChartData(result *analyzer.AnalysisResult) *ChartData {
 	data := &ChartData{
 		ComplexityDist:    buildComplexityDistribution(result),
 		IssueCounts:       buildIssueCountData(result.Issues),
+		Heatmap:           buildHeatmapData(result),
 	}
 
 	// Only build coverage breakdown if coverage data exists
@@ -181,6 +194,92 @@ func formatIssueTypeForChart(issueType string) string {
 		return label
 	}
 	return issueType
+}
+
+// buildHeatmapData creates heatmap cells for file complexity visualization
+func buildHeatmapData(result *analyzer.AnalysisResult) []*HeatmapCell {
+	if result == nil || len(result.Files) == 0 {
+		return nil
+	}
+
+	cells := make([]*HeatmapCell, 0, len(result.Files))
+
+	for _, file := range result.Files {
+		// Skip files with no functions
+		if len(file.Metrics.Functions) == 0 {
+			continue
+		}
+
+		// Calculate average complexity for the file
+		totalComplexity := 0
+		for _, fn := range file.Metrics.Functions {
+			totalComplexity += fn.Complexity
+		}
+		avgComplexity := float64(totalComplexity) / float64(len(file.Metrics.Functions))
+
+		// Determine color based on complexity
+		color := getComplexityColor(avgComplexity)
+
+		// Determine relative size (1-5) based on LOC
+		size := getRelativeSize(file.Metrics.TotalLines)
+
+		// Extract filename from path
+		fileName := file.Path
+		if idx := len(file.Path) - 1; idx >= 0 {
+			for i := idx; i >= 0; i-- {
+				if file.Path[i] == '/' {
+					fileName = file.Path[i+1:]
+					break
+				}
+			}
+		}
+
+		cell := &HeatmapCell{
+			FilePath:   file.Path,
+			FileName:   fileName,
+			Complexity: avgComplexity,
+			LOC:        file.Metrics.TotalLines,
+			Functions:  len(file.Metrics.Functions),
+			Color:      color,
+			Size:       size,
+		}
+
+		cells = append(cells, cell)
+	}
+
+	return cells
+}
+
+// getComplexityColor returns a color based on average complexity
+func getComplexityColor(complexity float64) string {
+	switch {
+	case complexity <= 5:
+		return "#10b981" // Green
+	case complexity <= 10:
+		return "#84cc16" // Light green
+	case complexity <= 15:
+		return "#f59e0b" // Yellow/Orange
+	case complexity <= 20:
+		return "#fb923c" // Orange
+	default:
+		return "#ef4444" // Red
+	}
+}
+
+// getRelativeSize returns a size class (1-5) based on lines of code
+func getRelativeSize(loc int) int {
+	switch {
+	case loc < 50:
+		return 1 // Small
+	case loc < 100:
+		return 2 // Medium-small
+	case loc < 200:
+		return 3 // Medium
+	case loc < 400:
+		return 4 // Medium-large
+	default:
+		return 5 // Large
+	}
 }
 
 // toJSON converts ChartData to JSON string for embedding in HTML

@@ -264,6 +264,78 @@ const htmlTemplate = `<!DOCTYPE html>
             color: var(--text);
         }
 
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.5rem;
+            padding: 1rem;
+            background: var(--bg);
+            border-radius: 0.5rem;
+        }
+
+        .heatmap-cell {
+            aspect-ratio: 1;
+            border-radius: 0.375rem;
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-start;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        .heatmap-filename {
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .heatmap-complexity {
+            font-size: 0.875rem;
+            font-weight: 700;
+            align-self: flex-end;
+        }
+
+        /* Size variants for heatmap cells */
+        .heatmap-cell.size-1 {
+            grid-column: span 1;
+            grid-row: span 1;
+        }
+
+        .heatmap-cell.size-2 {
+            grid-column: span 1;
+            grid-row: span 1;
+        }
+
+        .heatmap-cell.size-3 {
+            grid-column: span 2;
+            grid-row: span 1;
+        }
+
+        .heatmap-cell.size-4 {
+            grid-column: span 2;
+            grid-row: span 2;
+        }
+
+        .heatmap-cell.size-5 {
+            grid-column: span 3;
+            grid-row: span 2;
+        }
+
         .empty-state {
             text-align: center;
             padding: 3rem;
@@ -297,6 +369,31 @@ const htmlTemplate = `<!DOCTYPE html>
 
             .charts-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .heatmap-grid {
+                grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+                gap: 0.375rem;
+            }
+
+            .heatmap-cell {
+                padding: 0.375rem;
+            }
+
+            .heatmap-filename {
+                font-size: 0.65rem;
+            }
+
+            .heatmap-complexity {
+                font-size: 0.75rem;
+            }
+
+            /* Simplify size variants on mobile */
+            .heatmap-cell.size-3,
+            .heatmap-cell.size-4,
+            .heatmap-cell.size-5 {
+                grid-column: span 2;
+                grid-row: span 1;
             }
 
             table {
@@ -486,6 +583,25 @@ const htmlTemplate = `<!DOCTYPE html>
                 </div>
                 {{end}}
             </div>
+
+            {{if .ChartData.Heatmap}}
+            <div style="margin-top: 2rem;">
+                <h3 class="chart-title">📁 Complexity Heatmap</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Each cell represents a file. Color indicates complexity, size indicates lines of code. Hover for details.
+                </p>
+                <div class="heatmap-grid">
+                    {{range .ChartData.Heatmap}}
+                    <div class="heatmap-cell size-{{.Size}}"
+                         style="background-color: {{.Color}};"
+                         title="{{.FileName}}&#10;Complexity: {{printf "%.1f" .Complexity}}&#10;Lines: {{.LOC}}&#10;Functions: {{.Functions}}">
+                        <span class="heatmap-filename">{{.FileName}}</span>
+                        <span class="heatmap-complexity">{{printf "%.1f" .Complexity}}</span>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
         </div>
         {{end}}
 
