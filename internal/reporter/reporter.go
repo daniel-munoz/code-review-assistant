@@ -40,6 +40,7 @@ type Reporter interface {
 //   - "console" (default): Human-readable console output with tables
 //   - "markdown": GitHub-flavored Markdown with tables and sections
 //   - "json": JSON output for programmatic consumption
+//   - "html": Interactive HTML dashboard with charts and visualizations
 //
 // Returns an error if the configured format is not supported.
 func NewReporter(cfg *config.OutputConfig) (Reporter, error) {
@@ -50,7 +51,9 @@ func NewReporter(cfg *config.OutputConfig) (Reporter, error) {
 		return NewMarkdownReporter(cfg), nil
 	case "json":
 		return NewJSONReporter(cfg), nil
+	case "html":
+		return NewHTMLReporter(cfg), nil
 	default:
-		return nil, fmt.Errorf("unsupported output format: %s (supported: console, markdown, json)", cfg.Format)
+		return nil, fmt.Errorf("unsupported output format: %s (supported: console, markdown, json, html)", cfg.Format)
 	}
 }
