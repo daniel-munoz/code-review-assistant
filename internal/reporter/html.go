@@ -114,6 +114,10 @@ type TemplateData struct {
 	// Comparison
 	Comparison *comparison.ComparisonResult
 
+	// Chart data
+	ChartData     *ChartData
+	ChartDataJSON template.JS
+
 	// Files (verbose mode)
 	Files   []*analyzer.FileAnalysis
 	Verbose bool
@@ -165,6 +169,12 @@ func (hr *HTMLReporter) buildTemplateData(result *analyzer.AnalysisResult, comp 
 		case "info":
 			data.InfoCount++
 		}
+	}
+
+	// Build chart data
+	data.ChartData = buildChartData(result)
+	if data.ChartData != nil {
+		data.ChartDataJSON = template.JS(data.ChartData.toJSON())
 	}
 
 	return data
