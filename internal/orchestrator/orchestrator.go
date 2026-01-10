@@ -73,6 +73,13 @@ func New(cfg *config.Config) (*Orchestrator, error) {
 		}
 	}
 
+	// Inject storage into HTMLReporter for historical trends
+	if store != nil {
+		if htmlReporter, ok := r.(*reporter.HTMLReporter); ok {
+			htmlReporter.WithStorage(store)
+		}
+	}
+
 	// Phase 3: Create comparator if enabled
 	var comp *comparison.Comparator
 	if cfg.Comparison.Enabled {

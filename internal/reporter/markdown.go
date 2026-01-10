@@ -75,19 +75,7 @@ func (mr *MarkdownReporter) Report(result *analyzer.AnalysisResult, comp *compar
 }
 
 func (mr *MarkdownReporter) createOutputFile(path string) (*os.File, error) {
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-
-	// Create or truncate file
-	file, err := os.Create(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
+	return CreateOutputFile(path)
 }
 
 func (mr *MarkdownReporter) writeHeader(result *analyzer.AnalysisResult) {

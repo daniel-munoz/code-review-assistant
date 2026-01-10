@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
@@ -86,17 +85,5 @@ func (jr *JSONReporter) Report(result *analyzer.AnalysisResult, comp *comparison
 }
 
 func (jr *JSONReporter) createOutputFile(path string) (*os.File, error) {
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-
-	// Create or truncate file
-	file, err := os.Create(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
+	return CreateOutputFile(path)
 }
