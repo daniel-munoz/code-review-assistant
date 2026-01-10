@@ -50,6 +50,7 @@ Modular detector system identifies common code smells:
 - **Console**: Rich terminal output with tables and color-coded severity (default)
 - **Markdown**: GitHub-flavored Markdown with tables and collapsible sections
 - **JSON**: Structured JSON output for programmatic consumption and CI/CD integration
+- **HTML**: Interactive dashboard with charts, heatmaps, and dependency graphs
 - File output capability for all formats
 - Pretty-print option for JSON
 
@@ -285,7 +286,49 @@ code-review-assistant analyze . --format json --output-file report.json
 
 # Compact JSON output
 code-review-assistant analyze . --format json --json-pretty=false
+
+# Generate interactive HTML dashboard
+code-review-assistant analyze . --format html --output-file dashboard.html
 ```
+
+### HTML Dashboard
+
+Generate a beautiful, interactive HTML dashboard with rich visualizations:
+
+```bash
+# Basic HTML dashboard
+code-review-assistant analyze . --format html --output-file dashboard.html
+
+# Full-featured dashboard with all analysis
+code-review-assistant analyze . \
+  --format html \
+  --enable-coverage \
+  --detect-circular-deps \
+  --output-file dashboard.html
+
+# Dashboard with historical trends
+code-review-assistant analyze . \
+  --format html \
+  --save-report \
+  --output-file dashboard.html
+```
+
+The HTML dashboard includes:
+
+- **📊 Summary Metrics**: Key statistics at a glance with visual cards
+- **📈 Complexity Distribution**: Interactive histogram showing function complexity ranges
+- **🎯 Coverage Breakdown**: Per-package test coverage with color-coded bars
+- **🔍 Issues Analysis**: Stacked bar chart breaking down issues by type and severity
+- **🗺️ Complexity Heatmap**: Visual grid showing file complexity with size-based cells
+- **🔗 Dependency Graph**: Interactive network visualization of package dependencies
+- **📉 Historical Trends**: Time-series charts showing metrics evolution (requires `--save-report`)
+
+Features:
+- ✅ Self-contained - works offline, no external dependencies
+- ✅ Responsive design - works on desktop, tablet, and mobile
+- ✅ Interactive charts - hover for details, zoom dependency graphs
+- ✅ Print-friendly - optimized CSS for printing reports
+- ✅ Accessible - keyboard navigation and ARIA labels
 
 ### Historical Tracking
 
@@ -586,11 +629,10 @@ code-review-assistant analyze . --save-report --storage-path /custom/path
 - **Local Analysis**: Does not integrate with Git history (planned for v2.0)
 - **Single Repository**: Analyzes one repository at a time
 
-Some possible v2.0 features include:
+Some possible future features include:
 - Git history integration and code churn detection
 - Multi-repository analysis
 - Custom rules engine with plugin support
-- HTML dashboard with interactive visualizations
 
 ## Contributing
 
