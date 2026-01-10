@@ -347,6 +347,41 @@ const htmlTemplate = `<!DOCTYPE html>
             margin-bottom: 1rem;
         }
 
+        /* Collapsible sections */
+        details {
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            background: var(--bg);
+        }
+
+        details summary {
+            cursor: pointer;
+            font-weight: 600;
+            user-select: none;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        details summary:hover {
+            background: var(--card-bg);
+        }
+
+        details[open] summary {
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Add arrow indicator */
+        details summary::marker {
+            content: '▶ ';
+        }
+
+        details[open] summary::marker {
+            content: '▼ ';
+        }
+
         footer {
             text-align: center;
             padding: 2rem;
@@ -557,197 +592,6 @@ const htmlTemplate = `<!DOCTYPE html>
         </div>
         {{end}}
 
-        {{if .ChartData}}
-        <div class="section">
-            <h2 class="section-title">📊 Visualizations</h2>
-
-            <div class="charts-grid">
-                {{if .ChartData.ComplexityDist}}
-                <div class="chart-container">
-                    <h3 class="chart-title">Complexity Distribution</h3>
-                    <canvas id="complexityChart"></canvas>
-                </div>
-                {{end}}
-
-                {{if .ChartData.CoverageBreakdown}}
-                <div class="chart-container">
-                    <h3 class="chart-title">Coverage by Package</h3>
-                    <canvas id="coverageChart"></canvas>
-                </div>
-                {{end}}
-
-                {{if .ChartData.IssueCounts}}
-                <div class="chart-container">
-                    <h3 class="chart-title">Issues by Type</h3>
-                    <canvas id="issuesChart"></canvas>
-                </div>
-                {{end}}
-            </div>
-
-            {{if .ChartData.Heatmap}}
-            <div style="margin-top: 2rem;">
-                <h3 class="chart-title">📁 Complexity Heatmap</h3>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Each cell represents a file. Color indicates complexity, size indicates lines of code. Hover for details.
-                </p>
-                <div class="heatmap-grid">
-                    {{range .ChartData.Heatmap}}
-                    <div class="heatmap-cell size-{{.Size}}"
-                         style="background-color: {{.Color}};"
-                         title="{{.FileName}}&#10;Complexity: {{printf "%.1f" .Complexity}}&#10;Lines: {{.LOC}}&#10;Functions: {{.Functions}}">
-                        <span class="heatmap-filename">{{.FileName}}</span>
-                        <span class="heatmap-complexity">{{printf "%.1f" .Complexity}}</span>
-                    </div>
-                    {{end}}
-                </div>
-            </div>
-            {{end}}
-
-            {{if .ChartData.DependencyGraph}}
-            <div style="margin-top: 2rem;">
-                <h3 class="chart-title">🔗 Dependency Graph</h3>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Interactive package dependency visualization. Circular dependencies highlighted in red.
-                </p>
-                <div id="dependencyGraph" style="width: 100%; height: 600px; background: var(--bg); border-radius: 0.5rem;"></div>
-            </div>
-            {{end}}
-
-            {{if .ChartData.MetricsTimeSeries}}
-            <div style="margin-top: 2rem;">
-                <h3 class="chart-title">📈 Historical Trends</h3>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Metrics over time showing code quality evolution. Based on {{len .ChartData.MetricsTimeSeries.Labels}} historical reports.
-                </p>
-                <div class="chart-container">
-                    <canvas id="trendsChart"></canvas>
-                </div>
-            </div>
-            {{end}}
-        </div>
-        {{end}}
-
-        {{if gt .IssueCount 0}}
-        <div class="section">
-            <h2 class="section-title">🔍 Issues Found ({{.IssueCount}})</h2>
-            <div class="stats-grid" style="margin-bottom: 1.5rem;">
-                <div class="stat-card">
-                    <div class="stat-label">Errors</div>
-                    <div class="stat-value" style="color: var(--danger);">{{.ErrorCount}}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Warnings</div>
-                    <div class="stat-value" style="color: var(--warning);">{{.WarningCount}}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Info</div>
-                    <div class="stat-value" style="color: var(--primary);">{{.InfoCount}}</div>
-                </div>
-            </div>
-
-            {{range .Issues}}
-            <div class="issue-item {{severityClass .Severity}}">
-                <div class="issue-header">
-                    <span>{{severityIcon .Severity}}</span>
-                    <span class="badge badge-{{.Severity}}">{{.Severity}}</span>
-                    <span class="issue-message">{{.Message}}</span>
-                </div>
-                <div class="issue-details">
-                    {{if .File}}
-                    <div class="issue-detail-item">
-                        <strong>File:</strong> <code>{{.File}}{{if gt .Line 0}}:{{.Line}}{{end}}</code>
-                    </div>
-                    {{end}}
-                    {{if .Function}}
-                    <div class="issue-detail-item">
-                        <strong>Function:</strong> <code>{{.Function}}</code>
-                    </div>
-                    {{end}}
-                    {{if ne .Type "magic_number"}}
-                    {{if eq .Type "duplicate_error_handling"}}
-                    <div class="issue-detail-item">
-                        <strong>Error checks:</strong> {{.Value}} (threshold: {{.Threshold}})
-                    </div>
-                    {{else if eq .Type "low_comment_ratio"}}
-                    <div class="issue-detail-item">
-                        <strong>Current:</strong> {{.Value}}% (recommended: >{{.Threshold}}%)
-                    </div>
-                    {{else if issueTypeLabel .Type}}
-                    <div class="issue-detail-item">
-                        <strong>{{issueTypeLabel .Type}}:</strong> {{.Value}} (threshold: {{.Threshold}})
-                    </div>
-                    {{end}}
-                    {{end}}
-                </div>
-            </div>
-            {{end}}
-        </div>
-        {{else}}
-        <div class="section">
-            <div class="empty-state">
-                <div class="empty-state-icon">✅</div>
-                <h3>No Issues Found</h3>
-                <p>Great job! No code quality issues were detected.</p>
-            </div>
-        </div>
-        {{end}}
-
-        {{if .Metrics.LargestFiles}}
-        {{if gt (len .Metrics.LargestFiles) 0}}
-        <div class="section">
-            <h2 class="section-title">📄 Largest Files</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>File</th>
-                        <th>Lines</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range $index, $file := .Metrics.LargestFiles}}
-                    <tr>
-                        <td>{{add $index 1}}</td>
-                        <td><code>{{$file.Path}}</code></td>
-                        <td>{{formatNumber $file.Lines}}</td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
-        </div>
-        {{end}}
-        {{end}}
-
-        {{if .Metrics.MostComplexFunctions}}
-        {{if gt (len .Metrics.MostComplexFunctions) 0}}
-        <div class="section">
-            <h2 class="section-title">🎯 Most Complex Functions</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>Function</th>
-                        <th>Complexity</th>
-                        <th>Lines</th>
-                        <th>File</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range $index, $fn := .Metrics.MostComplexFunctions}}
-                    <tr>
-                        <td>{{add $index 1}}</td>
-                        <td><code>{{$fn.Function}}</code></td>
-                        <td><strong>{{$fn.Complexity}}</strong></td>
-                        <td>{{$fn.Lines}}</td>
-                        <td><code>{{$fn.File}}</code></td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
-        </div>
-        {{end}}
-        {{end}}
-
         {{if .Coverage}}
         <div class="section">
             <h2 class="section-title">🧪 Test Coverage</h2>
@@ -857,6 +701,202 @@ const htmlTemplate = `<!DOCTYPE html>
             </details>
             {{end}}
         </div>
+        {{end}}
+
+        {{if gt .IssueCount 0}}
+        <div class="section">
+            <h2 class="section-title">🔍 Issues Found ({{.IssueCount}})</h2>
+            <div class="stats-grid" style="margin-bottom: 1.5rem;">
+                <div class="stat-card">
+                    <div class="stat-label">Errors</div>
+                    <div class="stat-value" style="color: var(--danger);">{{.ErrorCount}}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Warnings</div>
+                    <div class="stat-value" style="color: var(--warning);">{{.WarningCount}}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Info</div>
+                    <div class="stat-value" style="color: var(--primary);">{{.InfoCount}}</div>
+                </div>
+            </div>
+
+            <details style="margin-top: 1rem;">
+                <summary>View All Issues</summary>
+                <div style="margin-top: 1rem;">
+                    {{range .Issues}}
+                    <div class="issue-item {{severityClass .Severity}}">
+                        <div class="issue-header">
+                            <span>{{severityIcon .Severity}}</span>
+                            <span class="badge badge-{{.Severity}}">{{.Severity}}</span>
+                            <span class="issue-message">{{.Message}}</span>
+                        </div>
+                        <div class="issue-details">
+                            {{if .File}}
+                            <div class="issue-detail-item">
+                                <strong>File:</strong> <code>{{.File}}{{if gt .Line 0}}:{{.Line}}{{end}}</code>
+                            </div>
+                            {{end}}
+                            {{if .Function}}
+                            <div class="issue-detail-item">
+                                <strong>Function:</strong> <code>{{.Function}}</code>
+                            </div>
+                            {{end}}
+                            {{if ne .Type "magic_number"}}
+                            {{if eq .Type "duplicate_error_handling"}}
+                            <div class="issue-detail-item">
+                                <strong>Error checks:</strong> {{.Value}} (threshold: {{.Threshold}})
+                            </div>
+                            {{else if eq .Type "low_comment_ratio"}}
+                            <div class="issue-detail-item">
+                                <strong>Current:</strong> {{.Value}}% (recommended: >{{.Threshold}}%)
+                            </div>
+                            {{else if issueTypeLabel .Type}}
+                            <div class="issue-detail-item">
+                                <strong>{{issueTypeLabel .Type}}:</strong> {{.Value}} (threshold: {{.Threshold}})
+                            </div>
+                            {{end}}
+                            {{end}}
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+            </details>
+        </div>
+        {{else}}
+        <div class="section">
+            <div class="empty-state">
+                <div class="empty-state-icon">✅</div>
+                <h3>No Issues Found</h3>
+                <p>Great job! No code quality issues were detected.</p>
+            </div>
+        </div>
+        {{end}}
+
+        {{if .ChartData}}
+        <div class="section">
+            <h2 class="section-title">📊 Visualizations</h2>
+
+            <div class="charts-grid">
+                {{if .ChartData.ComplexityDist}}
+                <div class="chart-container">
+                    <h3 class="chart-title">Complexity Distribution</h3>
+                    <canvas id="complexityChart"></canvas>
+                </div>
+                {{end}}
+
+                {{if .ChartData.CoverageBreakdown}}
+                <div class="chart-container">
+                    <h3 class="chart-title">Coverage by Package</h3>
+                    <canvas id="coverageChart"></canvas>
+                </div>
+                {{end}}
+
+                {{if .ChartData.IssueCounts}}
+                <div class="chart-container">
+                    <h3 class="chart-title">Issues by Type</h3>
+                    <canvas id="issuesChart"></canvas>
+                </div>
+                {{end}}
+            </div>
+
+            {{if .ChartData.Heatmap}}
+            <div style="margin-top: 2rem;">
+                <h3 class="chart-title">📁 Complexity Heatmap</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Each cell represents a file. Color indicates complexity, size indicates lines of code. Hover for details.
+                </p>
+                <div class="heatmap-grid">
+                    {{range .ChartData.Heatmap}}
+                    <div class="heatmap-cell size-{{.Size}}"
+                         style="background-color: {{.Color}};"
+                         title="{{.FileName}}&#10;Complexity: {{printf "%.1f" .Complexity}}&#10;Lines: {{.LOC}}&#10;Functions: {{.Functions}}">
+                        <span class="heatmap-filename">{{.FileName}}</span>
+                        <span class="heatmap-complexity">{{printf "%.1f" .Complexity}}</span>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+
+            {{if .ChartData.DependencyGraph}}
+            <div style="margin-top: 2rem;">
+                <h3 class="chart-title">🔗 Dependency Graph</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Interactive package dependency visualization. Circular dependencies highlighted in red.
+                </p>
+                <div id="dependencyGraph" style="width: 100%; height: 600px; background: var(--bg); border-radius: 0.5rem;"></div>
+            </div>
+            {{end}}
+
+            {{if .ChartData.MetricsTimeSeries}}
+            <div style="margin-top: 2rem;">
+                <h3 class="chart-title">📈 Historical Trends</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Metrics over time showing code quality evolution. Based on {{len .ChartData.MetricsTimeSeries.Labels}} historical reports.
+                </p>
+                <div class="chart-container">
+                    <canvas id="trendsChart"></canvas>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if .Metrics.LargestFiles}}
+        {{if gt (len .Metrics.LargestFiles) 0}}
+        <div class="section">
+            <h2 class="section-title">📄 Largest Files</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>File</th>
+                        <th>Lines</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $index, $file := .Metrics.LargestFiles}}
+                    <tr>
+                        <td>{{add $index 1}}</td>
+                        <td><code>{{$file.Path}}</code></td>
+                        <td>{{formatNumber $file.Lines}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+        {{end}}
+
+        {{if .Metrics.MostComplexFunctions}}
+        {{if gt (len .Metrics.MostComplexFunctions) 0}}
+        <div class="section">
+            <h2 class="section-title">🎯 Most Complex Functions</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Function</th>
+                        <th>Complexity</th>
+                        <th>Lines</th>
+                        <th>File</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $index, $fn := .Metrics.MostComplexFunctions}}
+                    <tr>
+                        <td>{{add $index 1}}</td>
+                        <td><code>{{$fn.Function}}</code></td>
+                        <td><strong>{{$fn.Complexity}}</strong></td>
+                        <td>{{$fn.Lines}}</td>
+                        <td><code>{{$fn.File}}</code></td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
         {{end}}
 
         <footer>
