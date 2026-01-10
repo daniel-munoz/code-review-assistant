@@ -12,12 +12,14 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/comparison"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/daniel-munoz/code-review-assistant/internal/constants"
+	"github.com/daniel-munoz/code-review-assistant/internal/storage"
 )
 
 // HTMLReporter implements Reporter for HTML dashboard output
 type HTMLReporter struct {
-	config *config.OutputConfig
-	output io.Writer
+	config  *config.OutputConfig
+	output  io.Writer
+	storage storage.Storage // Optional storage for historical trends
 }
 
 // NewHTMLReporter creates a new HTMLReporter
@@ -26,6 +28,12 @@ func NewHTMLReporter(cfg *config.OutputConfig) *HTMLReporter {
 		config: cfg,
 		output: os.Stdout, // Default to stdout
 	}
+}
+
+// WithStorage sets the storage for historical trend analysis
+func (hr *HTMLReporter) WithStorage(store storage.Storage) *HTMLReporter {
+	hr.storage = store
+	return hr
 }
 
 // Report generates an HTML formatted dashboard report
@@ -171,8 +179,8 @@ func (hr *HTMLReporter) buildTemplateData(result *analyzer.AnalysisResult, comp 
 		}
 	}
 
-	// Build chart data
-	data.ChartData = buildChartData(result)
+	// Build chart data (with optional storage for historical trends)
+	data.ChartData = buildChartData(result, hr.storage)
 	if data.ChartData != nil {
 		data.ChartDataJSON = template.JS(data.ChartData.toJSON())
 	}

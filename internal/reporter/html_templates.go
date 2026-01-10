@@ -612,6 +612,18 @@ const htmlTemplate = `<!DOCTYPE html>
                 <div id="dependencyGraph" style="width: 100%; height: 600px; background: var(--bg); border-radius: 0.5rem;"></div>
             </div>
             {{end}}
+
+            {{if .ChartData.MetricsTimeSeries}}
+            <div style="margin-top: 2rem;">
+                <h3 class="chart-title">📈 Historical Trends</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Metrics over time showing code quality evolution. Based on {{len .ChartData.MetricsTimeSeries.Labels}} historical reports.
+                </p>
+                <div class="chart-container">
+                    <canvas id="trendsChart"></canvas>
+                </div>
+            </div>
+            {{end}}
         </div>
         {{end}}
 
@@ -1110,6 +1122,121 @@ const htmlTemplate = `<!DOCTYPE html>
                         easingFunction: 'easeInOutQuad'
                     }
                 });
+            });
+        }
+        {{end}}
+
+        // Historical Trends Chart
+        {{if .ChartData.MetricsTimeSeries}}
+        const trendsCanvas = document.getElementById('trendsChart');
+        if (trendsCanvas && chartData.metricsTimeSeries) {
+            const trendsCtx = trendsCanvas.getContext('2d');
+            new Chart(trendsCtx, {
+                type: 'line',
+                data: {
+                    labels: chartData.metricsTimeSeries.labels,
+                    datasets: [
+                        {
+                            label: 'Avg Complexity',
+                            data: chartData.metricsTimeSeries.complexity,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Coverage %',
+                            data: chartData.metricsTimeSeries.coverage,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            label: 'Issues',
+                            data: chartData.metricsTimeSeries.issueCount,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y2'
+                        },
+                        {
+                            label: 'Lines of Code',
+                            data: chartData.metricsTimeSeries.totalLines,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y3'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const index = context[0].dataIndex;
+                                    const timestamp = chartData.metricsTimeSeries.timestamps[index];
+                                    return new Date(timestamp).toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Avg Complexity'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Coverage %'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        },
+                        y2: {
+                            type: 'linear',
+                            display: false,
+                            position: 'right'
+                        },
+                        y3: {
+                            type: 'linear',
+                            display: false,
+                            position: 'right'
+                        }
+                    }
+                }
             });
         }
         {{end}}

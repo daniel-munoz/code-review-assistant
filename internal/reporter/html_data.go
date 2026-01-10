@@ -1,18 +1,22 @@
 package reporter
 
 import (
+	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
+	"github.com/daniel-munoz/code-review-assistant/internal/storage"
 )
 
 // ChartData contains all pre-processed data for JavaScript charts
 type ChartData struct {
-	ComplexityDist    *ComplexityDistribution `json:"complexityDist"`
-	CoverageBreakdown *CoverageBreakdownData  `json:"coverageBreakdown"`
-	IssueCounts       *IssueCountData         `json:"issueCounts"`
-	Heatmap           []*HeatmapCell          `json:"heatmap"`
-	DependencyGraph   *DependencyGraphData    `json:"dependencyGraph"`
+	ComplexityDist    *ComplexityDistribution  `json:"complexityDist"`
+	CoverageBreakdown *CoverageBreakdownData   `json:"coverageBreakdown"`
+	IssueCounts       *IssueCountData          `json:"issueCounts"`
+	Heatmap           []*HeatmapCell           `json:"heatmap"`
+	DependencyGraph   *DependencyGraphData     `json:"dependencyGraph"`
+	MetricsTimeSeries *MetricsTimeSeriesData   `json:"metricsTimeSeries,omitempty"`
 }
 
 // ComplexityDistribution for histogram showing function complexity distribution
@@ -71,7 +75,7 @@ type GraphEdge struct {
 }
 
 // buildChartData transforms AnalysisResult into chart-ready data
-func buildChartData(result *analyzer.AnalysisResult) *ChartData {
+func buildChartData(result *analyzer.AnalysisResult, store storage.Storage) *ChartData {
 	if result == nil {
 		return nil
 	}
@@ -90,6 +94,11 @@ func buildChartData(result *analyzer.AnalysisResult) *ChartData {
 	// Only build dependency graph if dependency data exists
 	if result.Dependencies != nil {
 		data.DependencyGraph = buildDependencyGraph(result.Dependencies)
+	}
+
+	// Only build time series if storage is available
+	if store != nil {
+		data.MetricsTimeSeries = buildTimeSeriesData(store, result.ProjectPath)
 	}
 
 	return data
@@ -430,4 +439,69 @@ func (cd *ChartData) toJSON() string {
 		return "null"
 	}
 	return string(bytes)
+}
+
+// MetricsTimeSeriesData for line chart showing metrics over time
+type MetricsTimeSeriesData struct {
+	Labels       []string  `json:"labels"`       // Timestamps (formatted)
+	Complexity   []float64 `json:"complexity"`   // Average complexity over time
+	Coverage     []float64 `json:"coverage"`     // Coverage percentage over time
+	IssueCount   []int     `json:"issueCount"`   // Total issues over time
+	TotalLines   []int     `json:"totalLines"`   // Total lines of code over time
+	RawTimestamps []string `json:"timestamps"`   // ISO timestamps for tooltips
+}
+
+// buildTimeSeriesData creates time series data from historical reports
+func buildTimeSeriesData(store storage.Storage, projectPath string) *MetricsTimeSeriesData {
+	if store == nil {
+		return nil
+	}
+
+	// Query last 20 reports
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	opts := storage.ListOptions{
+		Limit: 20,
+	}
+
+	metadata, err := store.List(ctx, projectPath, opts)
+	if err != nil || len(metadata) == 0 {
+		return nil
+	}
+
+	// Need at least 2 data points for a meaningful trend
+	if len(metadata) < 2 {
+		return nil
+	}
+
+	// Reverse to get chronological order (List returns newest first)
+	for i := 0; i < len(metadata)/2; i++ {
+		j := len(metadata) - i - 1
+		metadata[i], metadata[j] = metadata[j], metadata[i]
+	}
+
+	data := &MetricsTimeSeriesData{
+		Labels:        make([]string, 0, len(metadata)),
+		Complexity:    make([]float64, 0, len(metadata)),
+		Coverage:      make([]float64, 0, len(metadata)),
+		IssueCount:    make([]int, 0, len(metadata)),
+		TotalLines:    make([]int, 0, len(metadata)),
+		RawTimestamps: make([]string, 0, len(metadata)),
+	}
+
+	for _, meta := range metadata {
+		// Format timestamp for display
+		label := meta.Timestamp.Format("Jan 2 15:04")
+		data.Labels = append(data.Labels, label)
+		data.RawTimestamps = append(data.RawTimestamps, meta.Timestamp.Format(time.RFC3339))
+
+		// Extract metrics from metadata
+		data.Complexity = append(data.Complexity, meta.AvgComplexity)
+		data.Coverage = append(data.Coverage, meta.AvgCoverage)
+		data.IssueCount = append(data.IssueCount, meta.IssueCount)
+		data.TotalLines = append(data.TotalLines, meta.TotalLines)
+	}
+
+	return data
 }
