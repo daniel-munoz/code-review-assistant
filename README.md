@@ -1,10 +1,10 @@
 # Code Review Assistant
 
-![Version](https://img.shields.io/badge/version-1.0-blue)
+![Version](https://img.shields.io/badge/version-1.1-blue)
 ![Go Version](https://img.shields.io/badge/go-1.21%2B-00ADD8)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Status: Production Ready (v1.0)**
+**Status: Production Ready (v1.1)**
 
 A comprehensive CLI tool that analyzes Go codebases to provide actionable insights about code quality, complexity, maintainability, test coverage, and dependencies. Track your code quality metrics over time with historical comparison and multiple output formats.
 
@@ -98,7 +98,7 @@ Run it on your codebase and discover similar opportunities!
 Install the latest stable release:
 
 ```bash
-go install github.com/daniel-munoz/code-review-assistant@v1.0.2
+go install github.com/daniel-munoz/code-review-assistant@v1.1.0
 ```
 
 Or build from source:
@@ -106,7 +106,7 @@ Or build from source:
 ```bash
 git clone https://github.com/daniel-munoz/code-review-assistant.git
 cd code-review-assistant
-git checkout v1.0.2
+git checkout v1.1.0
 go build -o code-review-assistant
 ```
 
