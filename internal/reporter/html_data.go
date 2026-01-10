@@ -332,10 +332,22 @@ func buildDependencyGraph(deps *analyzer.DependencyReport) *DependencyGraphData 
 	}
 
 	nodeMap := make(map[string]bool)
+	circularEdges := buildCircularEdgeSet(deps.CircularDependencies)
+
+	// Create nodes for all packages
+	for _, pkg := range deps.Packages {
+		addPackageNode(graph, &nodeMap, pkg)
+		addDependencyEdges(graph, &nodeMap, pkg, circularEdges)
+	}
+
+	return graph
+}
+
+// buildCircularEdgeSet creates a set of edge keys that are part of circular dependencies
+func buildCircularEdgeSet(circularDeps []*analyzer.CircularDependency) map[string]bool {
 	circularEdges := make(map[string]bool)
 
-	// Build set of circular dependency edges for highlighting
-	for _, circular := range deps.CircularDependencies {
+	for _, circular := range circularDeps {
 		if len(circular.Cycle) < 2 {
 			continue
 		}
@@ -346,87 +358,103 @@ func buildDependencyGraph(deps *analyzer.DependencyReport) *DependencyGraphData 
 		}
 	}
 
-	// Create nodes for each package
-	for _, pkg := range deps.Packages {
-		if !nodeMap[pkg.PackageName] {
-			// Extract short label from full package path
-			label := pkg.PackageName
-			if idx := len(label) - 1; idx >= 0 {
-				for i := idx; i >= 0; i-- {
-					if label[i] == '/' {
-						label = label[i+1:]
-						break
-					}
-				}
-			}
+	return circularEdges
+}
 
-			// Determine group (for coloring)
-			group := "internal"
-			if len(pkg.ExternalImports) > 0 && len(pkg.InternalImports) == 0 {
-				group = "external"
-			}
-
-			// Create tooltip with details
-			title := pkg.PackageName + "\\n" +
-				"Total imports: " + formatNumber(pkg.TotalImports) + "\\n" +
-				"Internal: " + formatNumber(len(pkg.InternalImports)) + "\\n" +
-				"External: " + formatNumber(len(pkg.ExternalImports))
-
-			node := GraphNode{
-				ID:    pkg.PackageName,
-				Label: label,
-				Group: group,
-				Value: pkg.TotalImports,
-				Title: title,
-			}
-			graph.Nodes = append(graph.Nodes, node)
-			nodeMap[pkg.PackageName] = true
-		}
-
-		// Create edges for internal dependencies
-		for _, imp := range pkg.InternalImports {
-			// Add imported package as node if not exists
-			if !nodeMap[imp] {
-				label := imp
-				if idx := len(label) - 1; idx >= 0 {
-					for i := idx; i >= 0; i-- {
-						if label[i] == '/' {
-							label = label[i+1:]
-							break
-						}
-					}
-				}
-
-				node := GraphNode{
-					ID:    imp,
-					Label: label,
-					Group: "internal",
-					Value: 1,
-					Title: imp,
-				}
-				graph.Nodes = append(graph.Nodes, node)
-				nodeMap[imp] = true
-			}
-
-			// Create edge
-			edgeKey := pkg.PackageName + "->" + imp
-			edge := GraphEdge{
-				From:  pkg.PackageName,
-				To:    imp,
-				Width: 1,
-			}
-
-			// Highlight circular dependencies in red
-			if circularEdges[edgeKey] {
-				edge.Color = "#ef4444" // Red
-				edge.Width = 3
-			}
-
-			graph.Edges = append(graph.Edges, edge)
-		}
+// addPackageNode adds a node for the given package if it doesn't already exist
+func addPackageNode(graph *DependencyGraphData, nodeMap *map[string]bool, pkg *analyzer.PackageDependencies) {
+	if (*nodeMap)[pkg.PackageName] {
+		return
 	}
 
-	return graph
+	label := extractShortLabel(pkg.PackageName)
+	group := determineNodeGroup(pkg)
+	title := buildNodeTooltip(pkg)
+
+	node := GraphNode{
+		ID:    pkg.PackageName,
+		Label: label,
+		Group: group,
+		Value: pkg.TotalImports,
+		Title: title,
+	}
+
+	graph.Nodes = append(graph.Nodes, node)
+	(*nodeMap)[pkg.PackageName] = true
+}
+
+// addDependencyEdges creates edges for all internal dependencies of a package
+func addDependencyEdges(graph *DependencyGraphData, nodeMap *map[string]bool, pkg *analyzer.PackageDependencies, circularEdges map[string]bool) {
+	for _, imp := range pkg.InternalImports {
+		ensureImportedNodeExists(graph, nodeMap, imp)
+		addEdge(graph, pkg.PackageName, imp, circularEdges)
+	}
+}
+
+// ensureImportedNodeExists adds a node for an imported package if it doesn't exist
+func ensureImportedNodeExists(graph *DependencyGraphData, nodeMap *map[string]bool, importPath string) {
+	if (*nodeMap)[importPath] {
+		return
+	}
+
+	node := GraphNode{
+		ID:    importPath,
+		Label: extractShortLabel(importPath),
+		Group: "internal",
+		Value: 1,
+		Title: importPath,
+	}
+
+	graph.Nodes = append(graph.Nodes, node)
+	(*nodeMap)[importPath] = true
+}
+
+// addEdge creates an edge between two packages, highlighting circular dependencies
+func addEdge(graph *DependencyGraphData, from, to string, circularEdges map[string]bool) {
+	edgeKey := from + "->" + to
+	edge := GraphEdge{
+		From:  from,
+		To:    to,
+		Width: 1,
+	}
+
+	// Highlight circular dependencies in red
+	if circularEdges[edgeKey] {
+		edge.Color = "#ef4444" // Red
+		edge.Width = 3
+	}
+
+	graph.Edges = append(graph.Edges, edge)
+}
+
+// extractShortLabel extracts the short package name from a full package path
+func extractShortLabel(fullPath string) string {
+	label := fullPath
+	if idx := len(label) - 1; idx >= 0 {
+		for i := idx; i >= 0; i-- {
+			if label[i] == '/' {
+				label = label[i+1:]
+				break
+			}
+		}
+	}
+	return label
+}
+
+// determineNodeGroup determines the visual group for a package node
+func determineNodeGroup(pkg *analyzer.PackageDependencies) string {
+	if len(pkg.ExternalImports) > 0 && len(pkg.InternalImports) == 0 {
+		return "external"
+	}
+	return "internal"
+}
+
+// buildNodeTooltip creates a tooltip with package details
+func buildNodeTooltip(pkg *analyzer.PackageDependencies) string {
+	return pkg.PackageName + "\\n" +
+		"Total imports: " + formatNumber(pkg.TotalImports) + "\\n" +
+		"Internal: " + formatNumber(len(pkg.InternalImports)) + "\\n" +
+		"External: " + formatNumber(len(pkg.ExternalImports))
 }
 
 // toJSON converts ChartData to JSON string for embedding in HTML

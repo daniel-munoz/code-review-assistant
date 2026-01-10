@@ -69,19 +69,7 @@ func (hr *HTMLReporter) Report(result *analyzer.AnalysisResult, comp *comparison
 
 // createOutputFile creates the output file, including any necessary directories
 func (hr *HTMLReporter) createOutputFile(path string) (*os.File, error) {
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-
-	// Create or truncate file
-	file, err := os.Create(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
+	return CreateOutputFile(path)
 }
 
 // TemplateData contains all data needed for the HTML template
