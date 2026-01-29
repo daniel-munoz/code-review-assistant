@@ -83,8 +83,9 @@ func (m *mockReporter) Report(result *analyzer.AnalysisResult, comp *comparison.
 func TestNew(t *testing.T) {
 	t.Run("creates orchestrator with valid config", func(t *testing.T) {
 		cfg := config.Default()
+		cfg.Language = "go" // Explicit language to avoid auto-detection
 
-		orch, err := New(cfg)
+		orch, err := New(cfg, "../../testdata/sample")
 
 		require.NoError(t, err, "should create orchestrator without error")
 		require.NotNil(t, orch, "orchestrator should not be nil")
@@ -96,11 +97,12 @@ func TestNew(t *testing.T) {
 
 	t.Run("creates orchestrator with custom config", func(t *testing.T) {
 		cfg := config.Default()
+		cfg.Language = "go" // Explicit language to avoid auto-detection
 		cfg.Analysis.LargeFileThreshold = 1000
 		cfg.Output.Format = "console"
 		cfg.Output.Verbose = true
 
-		orch, err := New(cfg)
+		orch, err := New(cfg, "../../testdata/sample")
 
 		require.NoError(t, err, "should create orchestrator without error")
 		require.NotNil(t, orch, "orchestrator should not be nil")

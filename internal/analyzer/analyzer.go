@@ -260,6 +260,10 @@ func (ma *MetricsAnalyzer) runDependencyAnalysis(projectPath string, metrics []*
 		fmt.Printf("Warning: Dependency analysis failed: %v\n", err)
 		return
 	}
+	if depAnalyzer == nil {
+		// Dependency analysis not available for this language
+		return
+	}
 
 	result.Dependencies = ma.analyzeDependenciesWithRunner(depAnalyzer, metrics, result)
 }

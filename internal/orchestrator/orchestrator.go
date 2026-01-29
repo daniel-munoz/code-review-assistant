@@ -11,6 +11,7 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/git"
 	"github.com/daniel-munoz/code-review-assistant/internal/language"
 	_ "github.com/daniel-munoz/code-review-assistant/internal/language/golang" // Register Go language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/python" // Register Python language
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/reporter"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
@@ -51,13 +52,14 @@ type Orchestrator struct {
 //   - Storage: for persistent storage (if enabled in Phase 3)
 //   - Comparator: for historical comparison (if enabled in Phase 3)
 //
+// The targetPath is used for language auto-detection when config.Language is "auto".
 // Returns an error if component creation fails.
-func New(cfg *config.Config) (*Orchestrator, error) {
+func New(cfg *config.Config, targetPath string) (*Orchestrator, error) {
 	// Create status reporter (needed by analyzer and parser)
 	statusReporter := status.NewReporter(&cfg.Output)
 
 	// Get language provider (detect or use configured)
-	lang, err := getLanguage(cfg)
+	lang, err := getLanguage(cfg, targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect language: %w", err)
 	}
@@ -116,16 +118,15 @@ func New(cfg *config.Config) (*Orchestrator, error) {
 }
 
 // getLanguage determines the language to use for analysis.
-// If cfg.Language is "auto" or empty, it attempts to detect the language.
+// If cfg.Language is "auto" or empty, it attempts to detect the language from project files.
 // Otherwise, it looks up the specified language by name.
-func getLanguage(cfg *config.Config) (language.Language, error) {
+func getLanguage(cfg *config.Config, targetPath string) (language.Language, error) {
 	langName := cfg.Language
 	if langName == "" || langName == "auto" {
 		// Auto-detect from project files
-		// For now, default to Go since that's the only registered language
-		lang, ok := language.Get("go")
-		if !ok {
-			return nil, fmt.Errorf("no languages registered")
+		lang, err := language.DetectLanguage(targetPath)
+		if err != nil {
+			return nil, fmt.Errorf("language auto-detection failed: %w", err)
 		}
 		return lang, nil
 	}

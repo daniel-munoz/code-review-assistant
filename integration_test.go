@@ -27,7 +27,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 		cfg.Output.Format = "console"
 		cfg.Output.Verbose = true
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -41,7 +41,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 		cfg.Output.Format = "markdown"
 		cfg.Output.OutputFile = tempFile
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -63,7 +63,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 		cfg.Output.OutputFile = tempFile
 		cfg.Output.JSONPretty = true
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -98,7 +98,7 @@ func TestIntegration_StorageWorkflow(t *testing.T) {
 		cfg.Storage.AutoSave = true
 		cfg.Comparison.Enabled = false // Don't compare on first run
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -119,7 +119,7 @@ func TestIntegration_StorageWorkflow(t *testing.T) {
 		cfg2.Comparison.Enabled = true
 		cfg2.Comparison.AutoCompare = true
 
-		orch2, err := orchestrator.New(cfg2)
+		orch2, err := orchestrator.New(cfg2, projectPath)
 		require.NoError(t, err, "should create orchestrator for second run")
 
 		err = orch2.Run(projectPath)
@@ -138,7 +138,7 @@ func TestIntegration_StorageWorkflow(t *testing.T) {
 		cfg.Storage.AutoSave = true
 		cfg.Comparison.Enabled = false
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -157,7 +157,7 @@ func TestIntegration_StorageWorkflow(t *testing.T) {
 		cfg2.Comparison.Enabled = true
 		cfg2.Comparison.AutoCompare = true
 
-		orch2, err := orchestrator.New(cfg2)
+		orch2, err := orchestrator.New(cfg2, projectPath)
 		require.NoError(t, err, "should create orchestrator for second run")
 
 		err = orch2.Run(projectPath)
@@ -176,7 +176,7 @@ func TestIntegration_ConfigurationMerge(t *testing.T) {
 		cfg.Analysis.ComplexityThreshold = 5
 		cfg.Analysis.MaxParameters = 3
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -190,7 +190,7 @@ func TestIntegration_ConfigurationMerge(t *testing.T) {
 			"**/testdata/**",
 		}
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -200,9 +200,11 @@ func TestIntegration_ConfigurationMerge(t *testing.T) {
 
 // TestIntegration_ErrorHandling tests error scenarios
 func TestIntegration_ErrorHandling(t *testing.T) {
+	projectPath := "testdata/sample"
+
 	t.Run("nonexistent directory", func(t *testing.T) {
 		cfg := config.Default()
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run("/nonexistent/path")
@@ -214,7 +216,7 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 		cfg.Output.Format = "markdown"
 		cfg.Output.OutputFile = "/nonexistent/directory/report.md"
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run("testdata/sample")
@@ -226,7 +228,7 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 		cfg.Storage.Enabled = false
 		cfg.Comparison.Enabled = true // Try to compare without storage
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run("testdata/sample")
@@ -244,7 +246,7 @@ func TestIntegration_CoverageAnalysis(t *testing.T) {
 		cfg.Analysis.EnableCoverage = true
 		cfg.Analysis.MinCoverageThreshold = 50.0
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -259,7 +261,7 @@ func TestIntegration_CoverageAnalysis(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.EnableCoverage = false
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -275,7 +277,7 @@ func TestIntegration_DependencyAnalysis(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.DetectCircularDeps = true
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -287,7 +289,7 @@ func TestIntegration_DependencyAnalysis(t *testing.T) {
 		cfg.Analysis.MaxImports = 5
 		cfg.Analysis.MaxExternalDependencies = 3
 
-		orch, err := orchestrator.New(cfg)
+		orch, err := orchestrator.New(cfg, projectPath)
 		require.NoError(t, err, "should create orchestrator")
 
 		err = orch.Run(projectPath)
@@ -307,7 +309,7 @@ func TestIntegration_AllFormatsWithComparison(t *testing.T) {
 	cfg1.Storage.Path = tempDir
 	cfg1.Storage.AutoSave = true
 
-	orch1, err := orchestrator.New(cfg1)
+	orch1, err := orchestrator.New(cfg1, projectPath)
 	require.NoError(t, err, "should create orchestrator")
 
 	err = orch1.Run(projectPath)
@@ -333,7 +335,7 @@ func TestIntegration_AllFormatsWithComparison(t *testing.T) {
 			cfg.Comparison.Enabled = true
 			cfg.Comparison.AutoCompare = true
 
-			orch, err := orchestrator.New(cfg)
+			orch, err := orchestrator.New(cfg, projectPath)
 			require.NoError(t, err, "should create orchestrator")
 
 			err = orch.Run(projectPath)
