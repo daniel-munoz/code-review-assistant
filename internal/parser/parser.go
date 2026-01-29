@@ -9,39 +9,38 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
 
-// Parser defines the interface for parsing Go source files and extracting metrics.
+// Parser defines the interface for parsing source files and extracting metrics.
 //
-// Implementations use Go's ast, parser, and token packages to analyze source
-// code structure and calculate metrics without executing the code.
+// Implementations analyze source code structure and calculate metrics without
+// executing the code. Each language has its own Parser implementation.
 type Parser interface {
-	// ParseFile parses a single Go source file and returns its metrics.
+	// ParseFile parses a single source file and returns its metrics.
 	//
-	// The path must point to a valid .go file. Returns FileMetrics containing:
+	// Returns FileMetrics containing:
 	//   - Line counts (total, code, comments, blank)
-	//   - Package information
+	//   - Package/module information
 	//   - Import list
 	//   - Function/method metrics (size, complexity, signature)
 	//
 	// Returns an error if:
-	//   - path is not a .go file
+	//   - file doesn't have the correct extension for this parser
 	//   - file doesn't exist
 	//   - file contains syntax errors
 	ParseFile(path string) (*FileMetrics, error)
 
-	// ParseDirectory recursively parses all Go files in a directory tree.
+	// ParseDirectory recursively parses all source files in a directory tree.
 	//
-	// Discovers and parses all .go files under the specified path, excluding
-	// files and directories matching the excludePatterns (glob patterns).
+	// Discovers and parses all files with matching extensions under the specified
+	// path, excluding files and directories matching the excludePatterns (glob patterns).
 	//
+	// The extensions parameter specifies which file extensions to include (e.g., [".go"]).
 	// The statusReporter parameter is used to report parsing progress.
 	//
 	// This method is fault-tolerant: parse errors for individual files are
 	// collected but don't stop processing. Returns:
 	//   - metrics: FileMetrics for all successfully parsed files
 	//   - errors: parse errors for files that failed (empty if all succeeded)
-	//
-	// Common exclude patterns: vendor/**, **/*_test.go, **/testdata/**
-	ParseDirectory(path string, excludePatterns []string, statusReporter status.Reporter) ([]*FileMetrics, []error)
+	ParseDirectory(path string, excludePatterns []string, extensions []string, statusReporter status.Reporter) ([]*FileMetrics, []error)
 }
 
 // ASTParser implements Parser using Go's AST (Abstract Syntax Tree) packages.
@@ -50,9 +49,9 @@ type Parser interface {
 // extracting structural metrics without requiring the code to compile or run.
 type ASTParser struct{}
 
-// NewParser creates a new Parser instance using AST-based parsing.
+// NewParser creates a new Parser instance using AST-based parsing for Go.
 //
-// Returns an ASTParser that can parse individual files or entire directory trees.
+// Returns an ASTParser that can parse individual Go files or entire directory trees.
 func NewParser() Parser {
 	return &ASTParser{}
 }
@@ -79,10 +78,10 @@ func (p *ASTParser) ParseFile(path string) (*FileMetrics, error) {
 	return parseGoFile(path)
 }
 
-// ParseDirectory recursively discovers and parses all Go files in a directory.
+// ParseDirectory recursively discovers and parses all source files in a directory.
 //
-// Uses filepath.Walk to traverse the directory tree, parsing all .go files
-// that don't match the exclude patterns. Patterns support glob syntax:
+// Uses filepath.Walk to traverse the directory tree, parsing all files with
+// matching extensions that don't match the exclude patterns. Patterns support glob syntax:
 //   - vendor/** - exclude vendor directory and subdirectories
 //   - **/*_test.go - exclude all test files
 //   - **/testdata/** - exclude testdata directories
@@ -93,13 +92,14 @@ func (p *ASTParser) ParseFile(path string) (*FileMetrics, error) {
 //   - Returns metrics for all successfully parsed files
 //
 // The excludePatterns are matched against paths relative to rootPath.
-func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string, statusReporter status.Reporter) ([]*FileMetrics, []error) {
+// The extensions parameter specifies which file extensions to include (e.g., [".go"]).
+func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string, extensions []string, statusReporter status.Reporter) ([]*FileMetrics, []error) {
 	var allMetrics []*FileMetrics
 	var errors []error
 	var fileCount int
 
 	// Initial status
-	statusReporter.Update("[PARSE] Discovering Go files...")
+	statusReporter.Update("[PARSE] Discovering files...")
 
 	// Walk the directory tree
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
@@ -117,8 +117,8 @@ func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string, st
 			return nil
 		}
 
-		// Only process .go files
-		if !strings.HasSuffix(path, ".go") {
+		// Only process files with matching extensions
+		if !hasMatchingExtension(path, extensions) {
 			return nil
 		}
 
@@ -148,6 +148,16 @@ func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string, st
 	}
 
 	return allMetrics, errors
+}
+
+// hasMatchingExtension checks if a path has one of the specified extensions.
+func hasMatchingExtension(path string, extensions []string) bool {
+	for _, ext := range extensions {
+		if strings.HasSuffix(path, ext) {
+			return true
+		}
+	}
+	return false
 }
 
 // shouldExclude checks if a path matches any of the exclude patterns

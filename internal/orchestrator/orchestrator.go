@@ -9,6 +9,8 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/comparison"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/daniel-munoz/code-review-assistant/internal/git"
+	"github.com/daniel-munoz/code-review-assistant/internal/language"
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/golang" // Register Go language
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/reporter"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
@@ -20,7 +22,7 @@ import (
 //
 // The orchestrator implements the analysis workflow:
 //   1. Load: Load previous report for comparison (if enabled)
-//   2. Parse: Discover and parse all Go source files
+//   2. Parse: Discover and parse all source files for the detected language
 //   3. Analyze: Apply metrics and quality checks
 //   4. Compare: Compare with previous report (if enabled)
 //   5. Report: Format and output results (including comparison)
@@ -30,6 +32,7 @@ import (
 // Storage, Comparator) that are configured and initialized based on the provided Config.
 type Orchestrator struct {
 	config     *config.Config
+	lang       language.Language       // Language provider
 	parser     parser.Parser
 	analyzer   analyzer.Analyzer
 	reporter   reporter.Reporter
@@ -41,6 +44,7 @@ type Orchestrator struct {
 // New creates a new Orchestrator with the given configuration.
 //
 // This function initializes all pipeline components:
+//   - Language: detects or uses configured language for analysis
 //   - Parser: for AST-based metrics extraction
 //   - Analyzer: for applying thresholds and detecting issues
 //   - Reporter: for formatted output (based on config.Output.Format)
@@ -52,11 +56,24 @@ func New(cfg *config.Config) (*Orchestrator, error) {
 	// Create status reporter (needed by analyzer and parser)
 	statusReporter := status.NewReporter(&cfg.Output)
 
-	// Create parser
-	p := parser.NewParser()
+	// Get language provider (detect or use configured)
+	lang, err := getLanguage(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect language: %w", err)
+	}
 
-	// Create analyzer
-	a := analyzer.NewAnalyzer(&cfg.Analysis, statusReporter)
+	// Get language-specific components
+	p := lang.Parser()
+	detectorRunner := lang.DetectorRunner(&cfg.Analysis)
+	coverageRunner := lang.CoverageRunner(&cfg.Analysis, statusReporter)
+
+	// Create dependency analyzer factory from language
+	depAnalyzerFactory := func(projectPath string) (analyzer.DependencyAnalyzer, error) {
+		return lang.DependencyAnalyzer(projectPath)
+	}
+
+	// Create analyzer with language-specific components
+	a := analyzer.NewAnalyzer(&cfg.Analysis, statusReporter, detectorRunner, coverageRunner, depAnalyzerFactory)
 
 	// Create reporter
 	r, err := reporter.NewReporter(&cfg.Output)
@@ -88,6 +105,7 @@ func New(cfg *config.Config) (*Orchestrator, error) {
 
 	return &Orchestrator{
 		config:     cfg,
+		lang:       lang,
 		parser:     p,
 		analyzer:   a,
 		reporter:   r,
@@ -95,6 +113,28 @@ func New(cfg *config.Config) (*Orchestrator, error) {
 		comparator: comp,
 		status:     statusReporter,
 	}, nil
+}
+
+// getLanguage determines the language to use for analysis.
+// If cfg.Language is "auto" or empty, it attempts to detect the language.
+// Otherwise, it looks up the specified language by name.
+func getLanguage(cfg *config.Config) (language.Language, error) {
+	langName := cfg.Language
+	if langName == "" || langName == "auto" {
+		// Auto-detect from project files
+		// For now, default to Go since that's the only registered language
+		lang, ok := language.Get("go")
+		if !ok {
+			return nil, fmt.Errorf("no languages registered")
+		}
+		return lang, nil
+	}
+
+	lang, ok := language.Get(langName)
+	if !ok {
+		return nil, fmt.Errorf("unsupported language: %s (available: %v)", langName, language.SupportedLanguages())
+	}
+	return lang, nil
 }
 
 // createStorage creates a storage backend based on configuration.
@@ -176,12 +216,12 @@ func (o *Orchestrator) Run(targetPath string) error {
 	previousReport, previousTimestamp := o.loadPreviousReport(ctx, targetPath)
 
 	// Stage 2: Parse and validate files
-	o.status.Update("[PARSE] Discovering Go files...")
+	o.status.Update(fmt.Sprintf("[PARSE] Discovering %s files...", o.lang.DisplayName()))
 	fileMetrics, parseErrors := o.parseAndValidate(targetPath)
 	o.reportParseErrors(parseErrors)
 
 	if len(fileMetrics) == 0 {
-		return fmt.Errorf("no Go files found to analyze in %s", targetPath)
+		return fmt.Errorf("no %s files found to analyze in %s", o.lang.DisplayName(), targetPath)
 	}
 
 	// Stage 3: Analyze the parsed metrics (status reporting delegated to analyzer)
@@ -222,9 +262,10 @@ func (o *Orchestrator) loadPreviousReport(ctx context.Context, targetPath string
 	return prev.Result, prev.Timestamp
 }
 
-// parseAndValidate parses all Go files in the target path
+// parseAndValidate parses all source files for the detected language in the target path
 func (o *Orchestrator) parseAndValidate(targetPath string) ([]*parser.FileMetrics, []error) {
-	return o.parser.ParseDirectory(targetPath, o.config.Analysis.ExcludePatterns, o.status)
+	extensions := o.lang.Extensions()
+	return o.parser.ParseDirectory(targetPath, o.config.Analysis.ExcludePatterns, extensions, o.status)
 }
 
 // reportParseErrors reports parsing errors to the user (max 5 errors shown)
