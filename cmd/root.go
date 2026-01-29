@@ -12,8 +12,8 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "code-review-assistant",
-	Short: "Analyze Go codebases for code quality insights",
-	Long: `Code Review Assistant is a CLI tool that analyzes Go codebases
+	Short: "Analyze codebases for code quality insights",
+	Long: `Code Review Assistant is a CLI tool that analyzes codebases
 to provide actionable insights about code quality, complexity, and maintainability.
 
 It helps developers identify technical debt, track metrics, and maintain

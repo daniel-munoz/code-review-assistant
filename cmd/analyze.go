@@ -12,14 +12,14 @@ import (
 var (
 	// Flags for analyze command
 	targetPath              string
-	languageFlag            string  // Language to analyze
+	languageFlag            string // Language to analyze
 	excludePatterns         []string
 	largeFileThreshold      int
 	longFunctionThreshold   int
 	complexityThreshold     int
 	outputFormat            string
-	outputFile              string  // Phase 3: Output file path
-	jsonPretty              bool    // Phase 3: Pretty-print JSON
+	outputFile              string // Phase 3: Output file path
+	jsonPretty              bool   // Phase 3: Pretty-print JSON
 	enableCoverage          bool
 	minCoverageThreshold    float64
 	coverageTimeout         int
@@ -28,10 +28,10 @@ var (
 	detectCircularDeps      bool
 
 	// Phase 3: Storage and comparison flags
-	saveReport      bool
-	compareReport   bool
-	storageBackend  string
-	storagePath     string
+	saveReport     bool
+	compareReport  bool
+	storageBackend string
+	storagePath    string
 
 	// Live status flags
 	quietMode  bool
@@ -48,8 +48,8 @@ The tool will parse source files in the specified directory, calculate various
 metrics, and identify potential issues such as large files, long functions,
 and low test coverage.
 
-Language is auto-detected by default. Currently supports Go, with Python and
-TypeScript support planned.
+Language is auto-detected by default. Currently supports Go and Python, with
+JavaScript and TypeScript support planned.
 
 Example usage:
   code-review-assistant analyze .
