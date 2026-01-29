@@ -65,7 +65,7 @@ func init() {
 	rootCmd.AddCommand(analyzeCmd)
 
 	// Language flag
-	analyzeCmd.Flags().StringVarP(&languageFlag, "language", "l", "auto", "language to analyze (auto, go)")
+	analyzeCmd.Flags().StringVarP(&languageFlag, "language", "l", "auto", "language to analyze (auto, go, python)")
 
 	// Local flags specific to analyze command
 	analyzeCmd.Flags().StringSliceVar(&excludePatterns, "exclude", []string{}, "additional exclude patterns (can be repeated)")
@@ -247,7 +247,7 @@ func addStorageOverrides(overrides map[string]interface{}, cmd *cobra.Command) {
 
 // executeAnalysis creates the orchestrator and runs the analysis
 func executeAnalysis(cfg *config.Config, targetPath string) error {
-	orch, err := orchestrator.New(cfg)
+	orch, err := orchestrator.New(cfg, targetPath)
 	if err != nil {
 		return fmt.Errorf("failed to create orchestrator: %w", err)
 	}

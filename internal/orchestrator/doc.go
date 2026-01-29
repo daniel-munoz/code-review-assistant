@@ -18,12 +18,13 @@
 // Create and run the orchestrator:
 //
 //	cfg := config.Default()
-//	orch, err := orchestrator.New(cfg)
+//	projectPath := "/path/to/project"
+//	orch, err := orchestrator.New(cfg, projectPath)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
 //
-//	err = orch.Run("/path/to/project")
+//	err = orch.Run(projectPath)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
