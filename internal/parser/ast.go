@@ -25,6 +25,7 @@ func parseGoFile(path string) (*FileMetrics, error) {
 	metrics := &FileMetrics{
 		FilePath:    path,
 		PackageName: node.Name.Name,
+		Language:    "go",
 		Functions:   []*FunctionMetrics{},
 		Imports:     []string{},
 	}

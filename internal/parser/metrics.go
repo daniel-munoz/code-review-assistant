@@ -13,7 +13,8 @@ package parser
 // throughout the analysis pipeline.
 type FileMetrics struct {
 	FilePath     string             // Absolute or relative path to the file
-	PackageName  string             // Package declaration
+	PackageName  string             // Package declaration (Go), module name (Python), module path (TypeScript)
+	Language     string             // Language identifier: "go", "python", "typescript", etc.
 	TotalLines   int                // Total lines in the file
 	CodeLines    int                // Lines with actual code (excluding blank and comments)
 	CommentLines int                // Lines with comments

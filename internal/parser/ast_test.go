@@ -148,7 +148,7 @@ func TestParseDirectory(t *testing.T) {
 	parser := NewParser()
 
 	t.Run("parse sample directory", func(t *testing.T) {
-		metricsSlice, errors := parser.ParseDirectory("../../testdata/sample", []string{}, status.NewSilentReporter())
+		metricsSlice, errors := parser.ParseDirectory("../../testdata/sample", []string{}, []string{".go"}, status.NewSilentReporter())
 
 		// Should have no errors
 		assert.Empty(t, errors, "should parse all files without errors")
@@ -173,7 +173,7 @@ func TestParseDirectory(t *testing.T) {
 
 	t.Run("parse with exclusions", func(t *testing.T) {
 		excludePatterns := []string{"**/large.go"}
-		metricsSlice, errors := parser.ParseDirectory("../../testdata/sample", excludePatterns, status.NewSilentReporter())
+		metricsSlice, errors := parser.ParseDirectory("../../testdata/sample", excludePatterns, []string{".go"}, status.NewSilentReporter())
 
 		assert.Empty(t, errors, "should parse without errors")
 
@@ -188,7 +188,7 @@ func TestParseDirectory(t *testing.T) {
 	})
 
 	t.Run("parse non-existent directory", func(t *testing.T) {
-		_, errors := parser.ParseDirectory("nonexistent", []string{}, status.NewSilentReporter())
+		_, errors := parser.ParseDirectory("nonexistent", []string{}, []string{".go"}, status.NewSilentReporter())
 		assert.NotEmpty(t, errors, "should have errors for non-existent directory")
 	})
 }

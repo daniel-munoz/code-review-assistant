@@ -2,9 +2,6 @@ package analyzer
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer/detectors"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
@@ -21,22 +18,61 @@ type Analyzer interface {
 	Analyze(projectPath string, metrics []*parserPkg.FileMetrics) (*AnalysisResult, error)
 }
 
-// MetricsAnalyzer implements Analyzer for basic metrics analysis
-type MetricsAnalyzer struct {
-	config         *config.AnalysisConfig
-	detectors      *detectors.Registry
-	coverageRunner *coverage.Runner
-	status         status.Reporter
-	projectPath    string
+// DetectorRunner runs anti-pattern detectors for a specific language.
+// This interface decouples the analyzer from language-specific AST types.
+type DetectorRunner interface {
+	// RunDetectors analyzes a file and returns any issues found by enabled detectors.
+	RunDetectors(cfg *config.AnalysisConfig, file *parserPkg.FileMetrics) []*detectors.Issue
 }
 
-// NewAnalyzer creates a new MetricsAnalyzer with the given configuration and status reporter
-func NewAnalyzer(cfg *config.AnalysisConfig, statusReporter status.Reporter) Analyzer {
+// CoverageRunner runs test coverage analysis for a specific language.
+type CoverageRunner interface {
+	// RunCoverage runs test coverage analysis for the project.
+	RunCoverage(projectPath string, excludePatterns []string) ([]*coverage.PackageCoverage, error)
+}
+
+// DependencyAnalyzer analyzes dependencies for a specific language.
+type DependencyAnalyzer interface {
+	// Analyze extracts and categorizes dependencies from parsed files.
+	Analyze(files []*parserPkg.FileMetrics) ([]*dependencies.PackageDependencies, error)
+	// DetectCircularDependencies finds circular import chains.
+	DetectCircularDependencies(files []*parserPkg.FileMetrics) ([]*dependencies.CircularDependency, error)
+}
+
+// DependencyAnalyzerFactory creates a DependencyAnalyzer for a project.
+type DependencyAnalyzerFactory func(projectPath string) (DependencyAnalyzer, error)
+
+// MetricsAnalyzer implements Analyzer for basic metrics analysis
+type MetricsAnalyzer struct {
+	config              *config.AnalysisConfig
+	detectorRunner      DetectorRunner
+	coverageRunner      CoverageRunner
+	depAnalyzerFactory  DependencyAnalyzerFactory
+	status              status.Reporter
+	projectPath         string
+}
+
+// NewAnalyzer creates a new MetricsAnalyzer with language-specific components.
+//
+// Parameters:
+//   - cfg: Analysis configuration with thresholds and settings
+//   - statusReporter: Reporter for live status updates
+//   - detectorRunner: Language-specific detector runner
+//   - coverageRunner: Language-specific coverage runner (can be nil)
+//   - depAnalyzerFactory: Factory to create dependency analyzer (can be nil)
+func NewAnalyzer(
+	cfg *config.AnalysisConfig,
+	statusReporter status.Reporter,
+	detectorRunner DetectorRunner,
+	coverageRunner CoverageRunner,
+	depAnalyzerFactory DependencyAnalyzerFactory,
+) Analyzer {
 	return &MetricsAnalyzer{
-		config:         cfg,
-		detectors:      detectors.NewRegistry(cfg),
-		coverageRunner: coverage.NewRunner(cfg.CoverageTimeout, statusReporter),
-		status:         statusReporter,
+		config:             cfg,
+		detectorRunner:     detectorRunner,
+		coverageRunner:     coverageRunner,
+		depAnalyzerFactory: depAnalyzerFactory,
+		status:             statusReporter,
 	}
 }
 
@@ -199,7 +235,7 @@ func (ma *MetricsAnalyzer) checkOverallQuality(result *AnalysisResult) {
 
 // runCoverageIfEnabled runs coverage analysis if enabled in config
 func (ma *MetricsAnalyzer) runCoverageIfEnabled(projectPath string, result *AnalysisResult) {
-	if !ma.config.EnableCoverage {
+	if !ma.config.EnableCoverage || ma.coverageRunner == nil {
 		return
 	}
 
@@ -214,46 +250,31 @@ func (ma *MetricsAnalyzer) runCoverageIfEnabled(projectPath string, result *Anal
 
 // runDependencyAnalysis runs dependency analysis if possible
 func (ma *MetricsAnalyzer) runDependencyAnalysis(projectPath string, metrics []*parserPkg.FileMetrics, result *AnalysisResult) {
+	if ma.depAnalyzerFactory == nil {
+		return
+	}
+
 	ma.status.Update("[ANALYZE] Analyzing dependencies...")
-	depAnalyzer, err := dependencies.NewAnalyzer(projectPath)
+	depAnalyzer, err := ma.depAnalyzerFactory(projectPath)
 	if err != nil {
 		fmt.Printf("Warning: Dependency analysis failed: %v\n", err)
 		return
 	}
 
-	result.Dependencies = ma.analyzeDependencies(depAnalyzer, metrics, result)
+	result.Dependencies = ma.analyzeDependenciesWithRunner(depAnalyzer, metrics, result)
 }
 
-// runDetectors re-parses file and runs anti-pattern detectors on all functions
+// runDetectors delegates to the language-specific detector runner
 func (ma *MetricsAnalyzer) runDetectors(file *parserPkg.FileMetrics) []*Issue {
-	var issues []*Issue
-
-	// Re-parse file to get AST
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, file.FilePath, nil, parser.ParseComments)
-	if err != nil {
-		// Skip detector analysis if parse fails
+	if ma.detectorRunner == nil {
 		return nil
 	}
-
-	// Run detectors on each function
-	for _, decl := range node.Decls {
-		funcDecl, ok := decl.(*ast.FuncDecl)
-		if !ok {
-			continue
-		}
-
-		// Find matching function metrics
-		for _, fn := range file.Functions {
-			// Match by name and start line
-			if funcDecl.Name.Name == fn.Name && fset.Position(funcDecl.Pos()).Line == fn.StartLine {
-				detectorIssues := ma.detectors.RunAll(file, fn, fset, funcDecl)
-				issues = append(issues, detectorIssues...)
-				break
-			}
-		}
+	detectorIssues := ma.detectorRunner.RunDetectors(ma.config, file)
+	// Convert from detectors.Issue to analyzer.Issue (they're the same type via alias)
+	issues := make([]*Issue, len(detectorIssues))
+	for i, issue := range detectorIssues {
+		issues[i] = issue
 	}
-
 	return issues
 }
 
@@ -312,8 +333,8 @@ func (ma *MetricsAnalyzer) analyzeCoverage(coverageResults []*coverage.PackageCo
 	return report
 }
 
-// analyzeDependencies processes dependency analysis and creates a dependency report
-func (ma *MetricsAnalyzer) analyzeDependencies(depAnalyzer *dependencies.Analyzer, metrics []*parserPkg.FileMetrics, result *AnalysisResult) *DependencyReport {
+// analyzeDependenciesWithRunner processes dependency analysis using the DependencyAnalyzer interface
+func (ma *MetricsAnalyzer) analyzeDependenciesWithRunner(depAnalyzer DependencyAnalyzer, metrics []*parserPkg.FileMetrics, result *AnalysisResult) *DependencyReport {
 	// Analyze dependencies
 	packageDeps, err := depAnalyzer.Analyze(metrics)
 	if err != nil {

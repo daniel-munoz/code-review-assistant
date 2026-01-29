@@ -7,6 +7,7 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
 	"github.com/daniel-munoz/code-review-assistant/internal/comparison"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
+	"github.com/daniel-munoz/code-review-assistant/internal/language"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,24 @@ import (
 )
 
 // Mock implementations for testing
+
+// mockLanguage implements language.Language for testing
+type mockLanguage struct{}
+
+func (m *mockLanguage) Name() string                      { return "mock" }
+func (m *mockLanguage) DisplayName() string               { return "Mock" }
+func (m *mockLanguage) Extensions() []string              { return []string{".go"} }
+func (m *mockLanguage) DefaultExcludePatterns() []string  { return nil }
+func (m *mockLanguage) Parser() parser.Parser             { return nil }
+func (m *mockLanguage) DetectorRunner(cfg *config.AnalysisConfig) language.DetectorRunner {
+	return nil
+}
+func (m *mockLanguage) CoverageRunner(cfg *config.AnalysisConfig, statusReporter status.Reporter) language.CoverageRunner {
+	return nil
+}
+func (m *mockLanguage) DependencyAnalyzer(projectPath string) (language.DependencyAnalyzer, error) {
+	return nil, nil
+}
 
 type mockParser struct {
 	metrics []*parser.FileMetrics
@@ -30,7 +49,7 @@ func (m *mockParser) ParseFile(filePath string) (*parser.FileMetrics, error) {
 	return nil, errors.New("no metrics or errors configured")
 }
 
-func (m *mockParser) ParseDirectory(dirPath string, excludePatterns []string, statusReporter status.Reporter) ([]*parser.FileMetrics, []error) {
+func (m *mockParser) ParseDirectory(dirPath string, excludePatterns []string, extensions []string, statusReporter status.Reporter) ([]*parser.FileMetrics, []error) {
 	return m.metrics, m.errors
 }
 
@@ -113,7 +132,8 @@ func TestRun_SuccessCase(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config:   cfg,
+		config: cfg,
+		lang:   &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -138,7 +158,8 @@ func TestRun_NoFilesFound(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config:   cfg,
+		config: cfg,
+		lang:   &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -148,7 +169,7 @@ func TestRun_NoFilesFound(t *testing.T) {
 	err := orch.Run("/empty/path")
 
 	assert.Error(t, err, "should return error when no files found")
-	assert.Contains(t, err.Error(), "no Go files found", "error message should indicate no files")
+	assert.Contains(t, err.Error(), "files found to analyze", "error message should indicate no files")
 	assert.False(t, mr.reportCalled, "reporter should not be called when no files found")
 }
 
@@ -182,7 +203,8 @@ func TestRun_ParseErrors(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config:   cfg,
+		config: cfg,
+		lang:   &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -221,7 +243,8 @@ func TestRun_ManyParseErrors(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config:   cfg,
+		config: cfg,
+		lang:   &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -250,7 +273,8 @@ func TestRun_AnalyzerFailure(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config:   cfg,
+		config: cfg,
+		lang:   &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -283,7 +307,8 @@ func TestRun_ReporterFailure(t *testing.T) {
 	}
 
 	orch := &Orchestrator{
-		config:   cfg,
+		config: cfg,
+		lang:   &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -313,7 +338,8 @@ func TestRun_ExcludePatterns(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config:   cfg,
+		config: cfg,
+		lang:   &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -347,6 +373,7 @@ func TestRun_IntegrationFlow(t *testing.T) {
 
 		orch := &Orchestrator{
 			config:   cfg,
+			lang:     &mockLanguage{},
 			parser:   mp,
 			analyzer: ma,
 			reporter: mr,

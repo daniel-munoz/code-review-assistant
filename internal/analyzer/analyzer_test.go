@@ -3,6 +3,7 @@ package analyzer
 import (
 	"testing"
 
+	"github.com/daniel-munoz/code-review-assistant/internal/analyzer/detectors"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
@@ -10,11 +11,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// mockDetectorRunner is a test helper that returns no issues
+type mockDetectorRunner struct{}
+
+func (m *mockDetectorRunner) RunDetectors(cfg *config.AnalysisConfig, file *parser.FileMetrics) []*detectors.Issue {
+	return nil
+}
+
+// newTestAnalyzer creates an analyzer for testing with minimal dependencies
+func newTestAnalyzer(cfg *config.AnalysisConfig) Analyzer {
+	return NewAnalyzer(cfg, status.NewSilentReporter(), &mockDetectorRunner{}, nil, nil)
+}
+
 func TestNewAnalyzer(t *testing.T) {
 	t.Run("creates analyzer with default config", func(t *testing.T) {
 		cfg := config.Default()
 
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		require.NotNil(t, analyzer, "analyzer should not be nil")
 		assert.IsType(t, &MetricsAnalyzer{}, analyzer, "should be MetricsAnalyzer")
@@ -28,7 +41,7 @@ func TestNewAnalyzer(t *testing.T) {
 			ComplexityThreshold:   15,
 		}
 
-		analyzer := NewAnalyzer(cfg, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(cfg)
 
 		require.NotNil(t, analyzer, "analyzer should not be nil")
 	})
@@ -37,7 +50,7 @@ func TestNewAnalyzer(t *testing.T) {
 func TestAnalyze_BasicMetrics(t *testing.T) {
 	t.Run("analyzes empty project", func(t *testing.T) {
 		cfg := config.Default()
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{}
 
@@ -54,7 +67,7 @@ func TestAnalyze_BasicMetrics(t *testing.T) {
 
 	t.Run("analyzes single file", func(t *testing.T) {
 		cfg := config.Default()
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -82,7 +95,7 @@ func TestAnalyze_BasicMetrics(t *testing.T) {
 
 	t.Run("aggregates multiple files", func(t *testing.T) {
 		cfg := config.Default()
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -122,7 +135,7 @@ func TestAnalyze_LargeFileDetection(t *testing.T) {
 	t.Run("detects large files", func(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.LargeFileThreshold = 100
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -158,7 +171,7 @@ func TestAnalyze_LargeFileDetection(t *testing.T) {
 	t.Run("does not flag files below threshold", func(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.LargeFileThreshold = 100
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -186,7 +199,7 @@ func TestAnalyze_LongFunctionDetection(t *testing.T) {
 	t.Run("detects long functions", func(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.LongFunctionThreshold = 50
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -229,7 +242,7 @@ func TestAnalyze_LongFunctionDetection(t *testing.T) {
 	t.Run("does not flag short functions", func(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.LongFunctionThreshold = 50
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -256,7 +269,7 @@ func TestAnalyze_HighComplexityDetection(t *testing.T) {
 	t.Run("detects high complexity functions", func(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.ComplexityThreshold = 10
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -299,7 +312,7 @@ func TestAnalyze_CommentRatio(t *testing.T) {
 	t.Run("flags low comment ratio", func(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.MinCommentRatio = 0.15
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -334,7 +347,7 @@ func TestAnalyze_CommentRatio(t *testing.T) {
 	t.Run("does not flag good comment ratio", func(t *testing.T) {
 		cfg := config.Default()
 		cfg.Analysis.MinCommentRatio = 0.15
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -363,7 +376,7 @@ func TestAnalyze_CommentRatio(t *testing.T) {
 func TestAnalyze_AggregateMetrics(t *testing.T) {
 	t.Run("calculates aggregate metrics", func(t *testing.T) {
 		cfg := config.Default()
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -406,7 +419,7 @@ func TestAnalyze_AggregateMetrics(t *testing.T) {
 
 	t.Run("identifies largest files", func(t *testing.T) {
 		cfg := config.Default()
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{FilePath: "small.go", TotalLines: 100},
@@ -428,7 +441,7 @@ func TestAnalyze_AggregateMetrics(t *testing.T) {
 
 	t.Run("identifies most complex functions", func(t *testing.T) {
 		cfg := config.Default()
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -462,7 +475,7 @@ func TestAnalyze_MultipleIssueTypes(t *testing.T) {
 		cfg.Analysis.LongFunctionThreshold = 50
 		cfg.Analysis.ComplexityThreshold = 10
 		cfg.Analysis.MinCommentRatio = 0.15
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{
@@ -503,7 +516,7 @@ func TestAnalyze_MultipleIssueTypes(t *testing.T) {
 func TestAnalyze_MethodDetection(t *testing.T) {
 	t.Run("handles methods with receiver types", func(t *testing.T) {
 		cfg := config.Default()
-		analyzer := NewAnalyzer(&cfg.Analysis, status.NewSilentReporter())
+		analyzer := newTestAnalyzer(&cfg.Analysis)
 
 		metrics := []*parser.FileMetrics{
 			{

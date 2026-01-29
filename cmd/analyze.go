@@ -12,6 +12,7 @@ import (
 var (
 	// Flags for analyze command
 	targetPath              string
+	languageFlag            string  // Language to analyze
 	excludePatterns         []string
 	largeFileThreshold      int
 	longFunctionThreshold   int
@@ -40,16 +41,20 @@ var (
 // analyzeCmd represents the analyze command
 var analyzeCmd = &cobra.Command{
 	Use:   "analyze [path]",
-	Short: "Analyze a Go codebase",
-	Long: `Analyze a Go codebase and generate a report with code quality insights.
+	Short: "Analyze a codebase for code quality issues",
+	Long: `Analyze a codebase and generate a report with code quality insights.
 
-The tool will parse all Go files in the specified directory, calculate various
+The tool will parse source files in the specified directory, calculate various
 metrics, and identify potential issues such as large files, long functions,
 and low test coverage.
+
+Language is auto-detected by default. Currently supports Go, with Python and
+TypeScript support planned.
 
 Example usage:
   code-review-assistant analyze .
   code-review-assistant analyze /path/to/project
+  code-review-assistant analyze . --language go
   code-review-assistant analyze . --large-file-threshold 1000
   code-review-assistant analyze . --exclude "generated/**" --verbose`,
 	Args: cobra.MaximumNArgs(1),
@@ -58,6 +63,9 @@ Example usage:
 
 func init() {
 	rootCmd.AddCommand(analyzeCmd)
+
+	// Language flag
+	analyzeCmd.Flags().StringVarP(&languageFlag, "language", "l", "auto", "language to analyze (auto, go)")
 
 	// Local flags specific to analyze command
 	analyzeCmd.Flags().StringSliceVar(&excludePatterns, "exclude", []string{}, "additional exclude patterns (can be repeated)")
@@ -134,6 +142,7 @@ func loadAndMergeConfig(cmd *cobra.Command) (*config.Config, error) {
 func buildOverridesMap(cmd *cobra.Command) map[string]interface{} {
 	overrides := make(map[string]interface{})
 
+	addLanguageOverrides(overrides, cmd)
 	addAnalysisOverrides(overrides)
 	addCoverageOverrides(overrides, cmd)
 	addDependencyOverrides(overrides, cmd)
@@ -141,6 +150,13 @@ func buildOverridesMap(cmd *cobra.Command) map[string]interface{} {
 	addStorageOverrides(overrides, cmd)
 
 	return overrides
+}
+
+// addLanguageOverrides adds language setting overrides
+func addLanguageOverrides(overrides map[string]interface{}, cmd *cobra.Command) {
+	if cmd.Flags().Changed("language") {
+		overrides["language"] = languageFlag
+	}
 }
 
 // addAnalysisOverrides adds Phase 1 analysis threshold overrides

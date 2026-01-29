@@ -14,7 +14,7 @@ func TestAnalyzeCommand(t *testing.T) {
 	t.Run("command exists", func(t *testing.T) {
 		assert.NotNil(t, analyzeCmd, "analyze command should exist")
 		assert.Equal(t, "analyze [path]", analyzeCmd.Use, "command use should match")
-		assert.Equal(t, "Analyze a Go codebase", analyzeCmd.Short, "command short description should match")
+		assert.Equal(t, "Analyze a codebase for code quality issues", analyzeCmd.Short, "command short description should match")
 	})
 
 	t.Run("command has required flags", func(t *testing.T) {

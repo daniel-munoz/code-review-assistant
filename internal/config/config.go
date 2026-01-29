@@ -21,6 +21,7 @@ import (
 // This layered approach allows flexible configuration for different environments
 // while maintaining sensible defaults.
 type Config struct {
+	Language   string           `mapstructure:"language"`   // Language to analyze: "auto", "go", "python", etc.
 	Analysis   AnalysisConfig   `mapstructure:"analysis"`
 	Output     OutputConfig     `mapstructure:"output"`
 	Storage    StorageConfig    `mapstructure:"storage"`    // Phase 3: Persistent storage
@@ -114,6 +115,7 @@ type ComparisonConfig struct {
 // patterns (vendor/, testdata/, *_test.go, *.pb.go) are excluded from analysis.
 func Default() *Config {
 	return &Config{
+		Language: "auto", // Auto-detect language by default
 		Analysis: AnalysisConfig{
 			ExcludePatterns:       constants.DefaultExcludePatterns,
 			LargeFileThreshold:    constants.DefaultLargeFileThreshold,
@@ -185,6 +187,7 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Set defaults
 	defaults := Default()
+	v.SetDefault("language", defaults.Language)
 	v.SetDefault("analysis.exclude_patterns", defaults.Analysis.ExcludePatterns)
 	v.SetDefault("analysis.large_file_threshold", defaults.Analysis.LargeFileThreshold)
 	v.SetDefault("analysis.long_function_threshold", defaults.Analysis.LongFunctionThreshold)
@@ -274,6 +277,7 @@ func LoadConfig(configPath string) (*Config, error) {
 //	}
 //	config.Merge(overrides)
 func (c *Config) Merge(overrides map[string]interface{}) {
+	c.mergeLanguageSettings(overrides)
 	c.mergeAnalysisThresholds(overrides)
 	c.mergeAntiPatternSettings(overrides)
 	c.mergeCoverageSettings(overrides)
@@ -282,6 +286,11 @@ func (c *Config) Merge(overrides map[string]interface{}) {
 	c.mergeStorageSettings(overrides)
 	c.mergeComparisonSettings(overrides)
 	c.mergeExcludePatterns(overrides)
+}
+
+// mergeLanguageSettings merges language settings
+func (c *Config) mergeLanguageSettings(overrides map[string]interface{}) {
+	mergeStringIfNonEmpty(&c.Language, overrides, "language")
 }
 
 // mergeAnalysisThresholds merges Phase 1 analysis threshold overrides
