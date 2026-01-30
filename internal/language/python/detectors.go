@@ -33,93 +33,145 @@ func NewDetectorRunner(cfg *config.AnalysisConfig) *PythonDetectorRunner {
 
 // RunDetectors parses a Python file and runs all enabled detectors.
 func (r *PythonDetectorRunner) RunDetectors(cfg *config.AnalysisConfig, file *parser.FileMetrics) []*detectors.Issue {
-	// Read file content
 	content, err := os.ReadFile(file.FilePath)
 	if err != nil {
 		return nil
 	}
 
-	// Parse with tree-sitter
-	tsParser := sitter.NewParser()
-	defer tsParser.Close()
-	tsParser.SetLanguage(r.language)
-
-	tree := tsParser.Parse(content, nil)
-	defer tree.Close()
-
-	root := tree.RootNode()
+	root, cleanup := r.parseFile(content)
+	if root == nil {
+		return nil
+	}
+	defer cleanup()
 
 	var issues []*detectors.Issue
-
-	// Run detectors on each function
 	for _, fn := range file.Functions {
-		// Parameter count detector
-		if cfg.MaxParameters > 0 && fn.Parameters > cfg.MaxParameters {
-			issues = append(issues, &detectors.Issue{
-				Severity:  "warning",
-				Type:      "too_many_parameters",
-				File:      file.FilePath,
-				Line:      fn.StartLine,
-				Function:  fn.FullName(),
-				Message:   fmt.Sprintf("Function has too many parameters (%d)", fn.Parameters),
-				Value:     fn.Parameters,
-				Threshold: cfg.MaxParameters,
-			})
-		}
-
-		// Find the function node for AST-based detectors
-		funcNode := findFunctionNode(root, content, fn.Name, fn.StartLine)
-		if funcNode == nil {
-			continue
-		}
-
-		bodyNode := funcNode.ChildByFieldName("body")
-		if bodyNode == nil {
-			continue
-		}
-
-		// Nesting depth detector
-		if cfg.MaxNestingDepth > 0 {
-			maxDepth := calculateMaxNestingDepth(bodyNode)
-			if maxDepth > cfg.MaxNestingDepth {
-				issues = append(issues, &detectors.Issue{
-					Severity:  "warning",
-					Type:      "deep_nesting",
-					File:      file.FilePath,
-					Line:      fn.StartLine,
-					Function:  fn.FullName(),
-					Message:   fmt.Sprintf("Function has deep nesting (depth: %d)", maxDepth),
-					Value:     maxDepth,
-					Threshold: cfg.MaxNestingDepth,
-				})
-			}
-		}
-
-		// Return count detector
-		if cfg.MaxReturnStatements > 0 {
-			returnCount := countReturnStatements(bodyNode)
-			if returnCount > cfg.MaxReturnStatements {
-				issues = append(issues, &detectors.Issue{
-					Severity:  "info",
-					Type:      "too_many_returns",
-					File:      file.FilePath,
-					Line:      fn.StartLine,
-					Function:  fn.FullName(),
-					Message:   fmt.Sprintf("Function has %d return statements", returnCount),
-					Value:     returnCount,
-					Threshold: cfg.MaxReturnStatements,
-				})
-			}
-		}
-
-		// Magic number detector
-		if cfg.DetectMagicNumbers {
-			magicIssues := detectMagicNumbers(bodyNode, content, file.FilePath, fn)
-			issues = append(issues, magicIssues...)
-		}
+		fnIssues := r.detectFunctionIssues(cfg, file, fn, root, content)
+		issues = append(issues, fnIssues...)
 	}
 
 	return issues
+}
+
+// parseFile creates a tree-sitter parser and parses the content.
+func (r *PythonDetectorRunner) parseFile(content []byte) (*sitter.Node, func()) {
+	tsParser := sitter.NewParser()
+	tsParser.SetLanguage(r.language)
+
+	tree := tsParser.Parse(content, nil)
+	cleanup := func() {
+		tree.Close()
+		tsParser.Close()
+	}
+
+	return tree.RootNode(), cleanup
+}
+
+// detectFunctionIssues runs all detectors on a single function.
+func (r *PythonDetectorRunner) detectFunctionIssues(cfg *config.AnalysisConfig, file *parser.FileMetrics, fn *parser.FunctionMetrics, root *sitter.Node, content []byte) []*detectors.Issue {
+	var issues []*detectors.Issue
+
+	// Parameter count detector (doesn't need AST)
+	if issue := detectTooManyParameters(cfg, file, fn); issue != nil {
+		issues = append(issues, issue)
+	}
+
+	// Find function body for AST-based detectors
+	bodyNode := findFunctionBody(root, content, fn.Name, fn.StartLine)
+	if bodyNode == nil {
+		return issues
+	}
+
+	// Nesting depth detector
+	if issue := detectDeepNesting(cfg, file, fn, bodyNode); issue != nil {
+		issues = append(issues, issue)
+	}
+
+	// Return count detector
+	if issue := detectTooManyReturns(cfg, file, fn, bodyNode); issue != nil {
+		issues = append(issues, issue)
+	}
+
+	// Magic number detector
+	if cfg.DetectMagicNumbers {
+		magicIssues := detectMagicNumbers(bodyNode, content, file.FilePath, fn)
+		issues = append(issues, magicIssues...)
+	}
+
+	return issues
+}
+
+// detectTooManyParameters checks if a function has too many parameters.
+func detectTooManyParameters(cfg *config.AnalysisConfig, file *parser.FileMetrics, fn *parser.FunctionMetrics) *detectors.Issue {
+	if cfg.MaxParameters <= 0 || fn.Parameters <= cfg.MaxParameters {
+		return nil
+	}
+
+	return &detectors.Issue{
+		Severity:  "warning",
+		Type:      "too_many_parameters",
+		File:      file.FilePath,
+		Line:      fn.StartLine,
+		Function:  fn.FullName(),
+		Message:   fmt.Sprintf("Function has too many parameters (%d)", fn.Parameters),
+		Value:     fn.Parameters,
+		Threshold: cfg.MaxParameters,
+	}
+}
+
+// detectDeepNesting checks if a function has excessive nesting depth.
+func detectDeepNesting(cfg *config.AnalysisConfig, file *parser.FileMetrics, fn *parser.FunctionMetrics, bodyNode *sitter.Node) *detectors.Issue {
+	if cfg.MaxNestingDepth <= 0 {
+		return nil
+	}
+
+	maxDepth := calculateMaxNestingDepth(bodyNode)
+	if maxDepth <= cfg.MaxNestingDepth {
+		return nil
+	}
+
+	return &detectors.Issue{
+		Severity:  "warning",
+		Type:      "deep_nesting",
+		File:      file.FilePath,
+		Line:      fn.StartLine,
+		Function:  fn.FullName(),
+		Message:   fmt.Sprintf("Function has deep nesting (depth: %d)", maxDepth),
+		Value:     maxDepth,
+		Threshold: cfg.MaxNestingDepth,
+	}
+}
+
+// detectTooManyReturns checks if a function has too many return statements.
+func detectTooManyReturns(cfg *config.AnalysisConfig, file *parser.FileMetrics, fn *parser.FunctionMetrics, bodyNode *sitter.Node) *detectors.Issue {
+	if cfg.MaxReturnStatements <= 0 {
+		return nil
+	}
+
+	returnCount := countReturnStatements(bodyNode)
+	if returnCount <= cfg.MaxReturnStatements {
+		return nil
+	}
+
+	return &detectors.Issue{
+		Severity:  "info",
+		Type:      "too_many_returns",
+		File:      file.FilePath,
+		Line:      fn.StartLine,
+		Function:  fn.FullName(),
+		Message:   fmt.Sprintf("Function has %d return statements", returnCount),
+		Value:     returnCount,
+		Threshold: cfg.MaxReturnStatements,
+	}
+}
+
+// findFunctionBody locates a function's body node by name and start line.
+func findFunctionBody(root *sitter.Node, content []byte, name string, startLine int) *sitter.Node {
+	funcNode := findFunctionNode(root, content, name, startLine)
+	if funcNode == nil {
+		return nil
+	}
+	return funcNode.ChildByFieldName("body")
 }
 
 // findFunctionNode locates a function_definition node by name and start line.
@@ -133,28 +185,28 @@ func findFunctionNode(root *sitter.Node, content []byte, name string, startLine 
 		}
 
 		if n.Kind() == "function_definition" {
-			nameNode := n.ChildByFieldName("name")
-			if nameNode != nil {
-				nodeName := string(content[nameNode.StartByte():nameNode.EndByte()])
-				nodeLine := int(n.StartPosition().Row) + 1
-				if nodeName == name && nodeLine == startLine {
-					result = n
-					return
-				}
+			if matchesFunctionSignature(n, content, name, startLine) {
+				result = n
+				return
 			}
 		}
 
-		// Recurse into children
-		for i := uint(0); i < n.ChildCount(); i++ {
-			child := n.Child(i)
-			if child != nil {
-				walk(child)
-			}
-		}
+		walkChildren(n, walk)
 	}
 
 	walk(root)
 	return result
+}
+
+// matchesFunctionSignature checks if a node matches the expected function name and line.
+func matchesFunctionSignature(n *sitter.Node, content []byte, name string, startLine int) bool {
+	nameNode := n.ChildByFieldName("name")
+	if nameNode == nil {
+		return false
+	}
+	nodeName := string(content[nameNode.StartByte():nameNode.EndByte()])
+	nodeLine := int(n.StartPosition().Row) + 1
+	return nodeName == name && nodeLine == startLine
 }
 
 // calculateMaxNestingDepth calculates the maximum nesting depth in a Python function body.
@@ -163,28 +215,16 @@ func calculateMaxNestingDepth(node *sitter.Node) int {
 
 	var traverse func(n *sitter.Node, currentDepth int)
 	traverse = func(n *sitter.Node, currentDepth int) {
-		nodeKind := n.Kind()
-
-		// Check if this is a nesting construct
-		isNestingConstruct := false
-		switch nodeKind {
-		case "if_statement", "for_statement", "while_statement", "try_statement",
-			"with_statement", "match_statement":
-			isNestingConstruct = true
-		}
-
 		newDepth := currentDepth
-		if isNestingConstruct {
-			newDepth = currentDepth + 1
+		if isNestingConstruct(n.Kind()) {
+			newDepth++
 			if newDepth > maxDepth {
 				maxDepth = newDepth
 			}
 		}
 
-		// Recurse into children
 		for i := uint(0); i < n.ChildCount(); i++ {
-			child := n.Child(i)
-			if child != nil {
+			if child := n.Child(i); child != nil {
 				traverse(child, newDepth)
 			}
 		}
@@ -194,100 +234,141 @@ func calculateMaxNestingDepth(node *sitter.Node) int {
 	return maxDepth
 }
 
+// isNestingConstruct returns true if the node kind increases nesting depth.
+func isNestingConstruct(kind string) bool {
+	switch kind {
+	case "if_statement", "for_statement", "while_statement",
+		"try_statement", "with_statement", "match_statement":
+		return true
+	}
+	return false
+}
+
 // countReturnStatements counts return statements in a Python function body.
 func countReturnStatements(node *sitter.Node) int {
 	count := 0
 
 	var walk func(n *sitter.Node)
 	walk = func(n *sitter.Node) {
-		if n.Kind() == "return_statement" {
+		kind := n.Kind()
+		if kind == "return_statement" {
 			count++
 		}
 
 		// Don't count returns in nested functions
-		if n.Kind() == "function_definition" || n.Kind() == "lambda" {
+		if kind == "function_definition" || kind == "lambda" {
 			return
 		}
 
-		// Recurse into children
-		for i := uint(0); i < n.ChildCount(); i++ {
-			child := n.Child(i)
-			if child != nil {
-				walk(child)
-			}
-		}
+		walkChildren(n, walk)
 	}
 
 	walk(node)
 	return count
 }
 
-// detectMagicNumbers finds numeric literals that aren't common constants and returns issues.
+// walkChildren iterates over all children of a node and calls the walker function.
+func walkChildren(n *sitter.Node, walker func(*sitter.Node)) {
+	for i := uint(0); i < n.ChildCount(); i++ {
+		if child := n.Child(i); child != nil {
+			walker(child)
+		}
+	}
+}
+
+// magicNumberContext holds state for magic number detection.
+type magicNumberContext struct {
+	content      []byte
+	filePath     string
+	fn           *parser.FunctionMetrics
+	seen         map[string]bool
+	issues       []*detectors.Issue
+	constPattern *regexp.Regexp
+}
+
+// commonNumbers that are acceptable and not flagged as magic numbers.
+var commonNumbers = map[string]bool{
+	"0": true, "1": true, "-1": true,
+	"0.0": true, "1.0": true, "-1.0": true,
+}
+
+// detectMagicNumbers finds numeric literals that aren't common constants.
 func detectMagicNumbers(node *sitter.Node, content []byte, filePath string, fn *parser.FunctionMetrics) []*detectors.Issue {
-	var issues []*detectors.Issue
-	seen := make(map[string]bool)
-
-	// Common acceptable numbers
-	commonNumbers := map[string]bool{
-		"0": true, "1": true, "-1": true,
-		"0.0": true, "1.0": true, "-1.0": true,
+	ctx := &magicNumberContext{
+		content:      content,
+		filePath:     filePath,
+		fn:           fn,
+		seen:         make(map[string]bool),
+		constPattern: regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`),
 	}
 
-	// Pattern to detect constant assignment (UPPER_CASE = number)
-	constantPattern := regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+	ctx.walk(node, false)
+	return ctx.issues
+}
 
-	var walk func(n *sitter.Node, inConstant bool)
-	walk = func(n *sitter.Node, inConstant bool) {
-		nodeKind := n.Kind()
+// walk recursively traverses the AST looking for magic numbers.
+func (ctx *magicNumberContext) walk(n *sitter.Node, inConstant bool) {
+	kind := n.Kind()
 
-		// Check if we're in a constant assignment
-		if nodeKind == "assignment" {
-			// Check if left side is an UPPER_CASE identifier
-			for i := uint(0); i < n.ChildCount(); i++ {
-				child := n.Child(i)
-				if child != nil && child.Kind() == "identifier" {
-					name := string(content[child.StartByte():child.EndByte()])
-					if constantPattern.MatchString(name) {
-						inConstant = true
-						break
-					}
-				}
-			}
+	// Check if we're entering a constant assignment
+	if kind == "assignment" {
+		inConstant = ctx.isConstantAssignment(n)
+	}
+
+	// Check for magic numbers
+	if kind == "integer" || kind == "float" {
+		ctx.checkMagicNumber(n, inConstant)
+	}
+
+	// Recurse into children
+	for i := uint(0); i < n.ChildCount(); i++ {
+		if child := n.Child(i); child != nil {
+			ctx.walk(child, inConstant)
 		}
+	}
+}
 
-		// Detect magic numbers
-		if nodeKind == "integer" || nodeKind == "float" {
-			if !inConstant {
-				numText := string(content[n.StartByte():n.EndByte()])
-				line := int(n.StartPosition().Row) + 1
-
-				// Avoid duplicate reporting
-				key := fmt.Sprintf("%s:%d", numText, line)
-				if !seen[key] && !commonNumbers[numText] {
-					seen[key] = true
-					issues = append(issues, &detectors.Issue{
-						Severity:  "info",
-						Type:      "magic_number",
-						File:      filePath,
-						Line:      line,
-						Function:  fn.FullName(),
-						Message:   "Magic number should be replaced with a named constant: " + numText,
-						Value:     0,
-						Threshold: 0,
-					})
-				}
-			}
-		}
-
-		// Recurse into children
-		for i := uint(0); i < n.ChildCount(); i++ {
-			child := n.Child(i)
-			if child != nil {
-				walk(child, inConstant)
+// isConstantAssignment checks if the assignment is to an UPPER_CASE identifier.
+func (ctx *magicNumberContext) isConstantAssignment(n *sitter.Node) bool {
+	for i := uint(0); i < n.ChildCount(); i++ {
+		child := n.Child(i)
+		if child != nil && child.Kind() == "identifier" {
+			name := string(ctx.content[child.StartByte():child.EndByte()])
+			if ctx.constPattern.MatchString(name) {
+				return true
 			}
 		}
 	}
+	return false
+}
 
-	walk(node, false)
-	return issues
+// checkMagicNumber checks if a numeric node is a magic number and records an issue.
+func (ctx *magicNumberContext) checkMagicNumber(n *sitter.Node, inConstant bool) {
+	if inConstant {
+		return
+	}
+
+	numText := string(ctx.content[n.StartByte():n.EndByte()])
+	if commonNumbers[numText] {
+		return
+	}
+
+	line := int(n.StartPosition().Row) + 1
+	key := fmt.Sprintf("%s:%d", numText, line)
+
+	if ctx.seen[key] {
+		return
+	}
+	ctx.seen[key] = true
+
+	ctx.issues = append(ctx.issues, &detectors.Issue{
+		Severity:  "info",
+		Type:      "magic_number",
+		File:      ctx.filePath,
+		Line:      line,
+		Function:  ctx.fn.FullName(),
+		Message:   "Magic number should be replaced with a named constant: " + numText,
+		Value:     0,
+		Threshold: 0,
+	})
 }

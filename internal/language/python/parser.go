@@ -194,7 +194,7 @@ func (p *PythonParser) extractFunction(node *sitter.Node, content []byte, classN
 	// Calculate complexity
 	bodyNode := node.ChildByFieldName("body")
 	if bodyNode != nil {
-		fm.Complexity = calculateComplexity(bodyNode, content)
+		fm.Complexity = calculateComplexity(bodyNode)
 	} else {
 		fm.Complexity = 1
 	}
@@ -238,37 +238,16 @@ func countParameters(node *sitter.Node, content []byte) int {
 }
 
 // calculateComplexity calculates cyclomatic complexity for a function body.
-func calculateComplexity(node *sitter.Node, content []byte) int {
+func calculateComplexity(node *sitter.Node) int {
 	complexity := 1 // Base complexity
 
 	var walk func(n *sitter.Node)
 	walk = func(n *sitter.Node) {
-		nodeType := n.Kind()
-
-		// Add complexity for control flow constructs
-		switch nodeType {
-		case "if_statement", "elif_clause":
-			complexity++
-		case "for_statement", "while_statement":
-			complexity++
-		case "except_clause":
-			complexity++
-		case "conditional_expression": // ternary
-			complexity++
-		case "boolean_operator": // and, or
-			complexity++
-		case "list_comprehension", "dict_comprehension", "set_comprehension", "generator_expression":
-			complexity++
-		case "match_statement": // Python 3.10+
-			complexity++
-		case "case_clause":
-			complexity++
-		}
+		complexity += complexityIncrement(n.Kind())
 
 		// Recurse into children
 		for i := uint(0); i < n.ChildCount(); i++ {
-			child := n.Child(i)
-			if child != nil {
+			if child := n.Child(i); child != nil {
 				walk(child)
 			}
 		}
@@ -276,6 +255,21 @@ func calculateComplexity(node *sitter.Node, content []byte) int {
 
 	walk(node)
 	return complexity
+}
+
+// complexityIncrement returns the complexity contribution for a given node kind.
+func complexityIncrement(kind string) int {
+	switch kind {
+	case "if_statement", "elif_clause",
+		"for_statement", "while_statement",
+		"except_clause",
+		"conditional_expression",
+		"boolean_operator",
+		"list_comprehension", "dict_comprehension", "set_comprehension", "generator_expression",
+		"match_statement", "case_clause":
+		return 1
+	}
+	return 0
 }
 
 // extractImports extracts import statements from the AST.
@@ -286,33 +280,11 @@ func (p *PythonParser) extractImports(node *sitter.Node, content []byte, metrics
 	var walk func()
 	walk = func() {
 		n := cursor.Node()
-		nodeType := n.Kind()
 
-		switch nodeType {
-		case "import_statement":
-			// import foo, bar
-			for i := uint(0); i < n.ChildCount(); i++ {
-				child := n.Child(i)
-				if child != nil && (child.Kind() == "dotted_name" || child.Kind() == "aliased_import") {
-					importText := string(content[child.StartByte():child.EndByte()])
-					// Extract just the module name from "module as alias"
-					if strings.Contains(importText, " as ") {
-						importText = strings.Split(importText, " as ")[0]
-					}
-					metrics.Imports = append(metrics.Imports, strings.TrimSpace(importText))
-				}
-			}
+		imports := extractImportsFromNode(n, content)
+		metrics.Imports = append(metrics.Imports, imports...)
 
-		case "import_from_statement":
-			// from foo import bar
-			moduleNode := n.ChildByFieldName("module_name")
-			if moduleNode != nil {
-				moduleName := string(content[moduleNode.StartByte():moduleNode.EndByte()])
-				metrics.Imports = append(metrics.Imports, moduleName)
-			}
-		}
-
-		// Recurse
+		// Recurse into children
 		if cursor.GotoFirstChild() {
 			for {
 				walk()
@@ -325,6 +297,51 @@ func (p *PythonParser) extractImports(node *sitter.Node, content []byte, metrics
 	}
 
 	walk()
+}
+
+// extractImportsFromNode extracts imports from a single node.
+func extractImportsFromNode(n *sitter.Node, content []byte) []string {
+	switch n.Kind() {
+	case "import_statement":
+		return extractDirectImports(n, content)
+	case "import_from_statement":
+		return extractFromImport(n, content)
+	}
+	return nil
+}
+
+// extractDirectImports handles "import foo, bar" statements.
+func extractDirectImports(n *sitter.Node, content []byte) []string {
+	var imports []string
+	for i := uint(0); i < n.ChildCount(); i++ {
+		child := n.Child(i)
+		if child == nil {
+			continue
+		}
+
+		kind := child.Kind()
+		if kind != "dotted_name" && kind != "aliased_import" {
+			continue
+		}
+
+		importText := string(content[child.StartByte():child.EndByte()])
+		// Extract just the module name from "module as alias"
+		if idx := strings.Index(importText, " as "); idx >= 0 {
+			importText = importText[:idx]
+		}
+		imports = append(imports, strings.TrimSpace(importText))
+	}
+	return imports
+}
+
+// extractFromImport handles "from foo import bar" statements.
+func extractFromImport(n *sitter.Node, content []byte) []string {
+	moduleNode := n.ChildByFieldName("module_name")
+	if moduleNode == nil {
+		return nil
+	}
+	moduleName := string(content[moduleNode.StartByte():moduleNode.EndByte()])
+	return []string{moduleName}
 }
 
 // countLines counts total, code, comment, and blank lines in Python source.
