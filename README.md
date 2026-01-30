@@ -13,9 +13,9 @@ A comprehensive CLI tool that analyzes codebases to provide actionable insights 
 | Language | Parsing | Metrics | Anti-Patterns | Coverage | Dependencies |
 |----------|---------|---------|---------------|----------|--------------|
 | **Go** | Go AST | Full | Full | Yes | Yes |
-| **Python** | tree-sitter | Full | Full | Planned | Planned |
+| **Python** | tree-sitter | Full | Full | No | No |
 
-More languages coming soon (TypeScript, JavaScript, Rust).
+Additional languages may be added based on user feedback.
 
 ## Features
 
@@ -513,18 +513,14 @@ code-review-assistant analyze . --save-report --storage-path /custom/path
 
 ## Roadmap
 
-### v2.1 (Planned)
-- Python test coverage via pytest-cov
-- Python dependency analysis via requirements.txt/pyproject.toml
+Future enhancements will be prioritized based on user feedback:
 
-### v2.2 (Planned)
-- TypeScript/JavaScript support
-- Rust support
-
-### Future
+- Additional language support (TypeScript, JavaScript, Rust, etc.)
 - Git history integration and code churn detection
 - Multi-repository analysis
 - Custom rules engine with plugin support
+
+Have a feature request? [Open an issue](https://github.com/daniel-munoz/code-review-assistant/issues) to let us know!
 
 ## Contributing
 
