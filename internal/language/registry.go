@@ -55,62 +55,32 @@ func All() []Language {
 // Detection is based on the presence of language-specific manifest files:
 //   - go.mod → Go
 //   - pyproject.toml, setup.py, requirements.txt → Python
-//   - package.json + tsconfig.json → TypeScript
-//   - package.json → JavaScript
-//   - Cargo.toml → Rust
 //
-// If no manifest file is found, falls back to counting file extensions.
 // Returns an error if no supported language can be detected.
 func DetectLanguage(projectPath string) (Language, error) {
 	// Check for language-specific manifest files in priority order
+	// Only includes languages that are currently implemented
 	manifestChecks := []struct {
-		files    []string
-		required []string // all must exist
+		file     string
 		langName string
 	}{
 		// Go: go.mod
-		{files: []string{"go.mod"}, langName: "go"},
-		// TypeScript: package.json + tsconfig.json (check before plain JS)
-		{files: []string{"package.json", "tsconfig.json"}, required: []string{"package.json", "tsconfig.json"}, langName: "typescript"},
-		// JavaScript: package.json only
-		{files: []string{"package.json"}, langName: "javascript"},
+		{"go.mod", "go"},
 		// Python: pyproject.toml, setup.py, or requirements.txt
-		{files: []string{"pyproject.toml"}, langName: "python"},
-		{files: []string{"setup.py"}, langName: "python"},
-		{files: []string{"requirements.txt"}, langName: "python"},
-		// Rust: Cargo.toml
-		{files: []string{"Cargo.toml"}, langName: "rust"},
+		{"pyproject.toml", "python"},
+		{"setup.py", "python"},
+		{"requirements.txt", "python"},
 	}
 
 	for _, check := range manifestChecks {
-		if check.required != nil {
-			// All required files must exist
-			allExist := true
-			for _, file := range check.required {
-				if !fileExists(filepath.Join(projectPath, file)) {
-					allExist = false
-					break
-				}
-			}
-			if allExist {
-				if lang, ok := Get(check.langName); ok {
-					return lang, nil
-				}
-			}
-		} else {
-			// Any of the files can trigger detection
-			for _, file := range check.files {
-				if fileExists(filepath.Join(projectPath, file)) {
-					if lang, ok := Get(check.langName); ok {
-						return lang, nil
-					}
-				}
+		if fileExists(filepath.Join(projectPath, check.file)) {
+			if lang, ok := Get(check.langName); ok {
+				return lang, nil
 			}
 		}
 	}
 
-	// Fallback: count file extensions (not implemented yet, just return error)
-	return nil, fmt.Errorf("could not detect language in %s: no supported manifest files found", projectPath)
+	return nil, fmt.Errorf("could not detect language in %s: no supported manifest files found (supported: Go, Python)", projectPath)
 }
 
 // fileExists checks if a file exists at the given path.
