@@ -221,8 +221,8 @@ func countParameters(node *sitter.Node, content []byte) int {
 		case "identifier", "typed_parameter", "default_parameter", "typed_default_parameter",
 			"list_splat_pattern", "dictionary_splat_pattern":
 			// Skip 'self' and 'cls' for methods
-			paramText := string(content[child.StartByte():child.EndByte()])
-			if nodeType == "identifier" && (paramText == "self" || paramText == "cls") {
+			paramName := extractParameterName(child, content)
+			if paramName == "self" || paramName == "cls" {
 				// Don't count self/cls
 			} else {
 				count++
@@ -235,6 +235,25 @@ func countParameters(node *sitter.Node, content []byte) int {
 	}
 
 	return count
+}
+
+// extractParameterName extracts the parameter name from any parameter node type.
+// For typed_parameter (e.g., "self: MyClass"), it extracts just the identifier.
+// For default_parameter (e.g., "x=5"), it extracts just the name.
+func extractParameterName(node *sitter.Node, content []byte) string {
+	switch node.Kind() {
+	case "identifier":
+		return string(content[node.StartByte():node.EndByte()])
+	case "typed_parameter", "default_parameter", "typed_default_parameter":
+		// The first child is typically the identifier
+		for i := uint(0); i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			if child.Kind() == "identifier" {
+				return string(content[child.StartByte():child.EndByte()])
+			}
+		}
+	}
+	return ""
 }
 
 // calculateComplexity calculates cyclomatic complexity for a function body.
