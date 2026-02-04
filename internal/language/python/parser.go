@@ -465,6 +465,18 @@ func matchPattern(path, pattern string) bool {
 func matchDoubleStarPattern(path, pattern string) bool {
 	parts := strings.Split(pattern, "**")
 
+	// Handle patterns like "**/node_modules/**" (3 parts: "", "/node_modules/", "")
+	if len(parts) == 3 && parts[0] == "" && parts[2] == "" {
+		// Pattern is **/something/** - match if "something" appears anywhere in path
+		middle := strings.Trim(parts[1], "/")
+		if middle != "" {
+			// Check if the middle part appears as a path component
+			return strings.Contains(path, middle+"/") || strings.Contains(path, "/"+middle+"/") ||
+				strings.HasPrefix(path, middle+"/") || path == middle
+		}
+		return true
+	}
+
 	if len(parts) == 2 {
 		prefix := strings.Trim(parts[0], "/")
 		suffix := strings.Trim(parts[1], "/")
