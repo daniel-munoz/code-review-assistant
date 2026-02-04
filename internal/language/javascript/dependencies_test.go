@@ -177,7 +177,7 @@ func TestNormalizeCycle(t *testing.T) {
 		{
 			name:     "needs rotation",
 			input:    []string{"c", "a", "b", "c"},
-			expected: []string{"a", "b", "c", "c"}, // Rotates to start with 'a', keeping all 4 elements
+			expected: []string{"a", "b", "c", "a"}, // Rotates to start with 'a', closes with 'a'
 		},
 		{
 			name:     "empty",

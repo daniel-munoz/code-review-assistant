@@ -243,7 +243,7 @@ func (p *JavaScriptParser) extractFunctionDeclaration(node *sitter.Node, content
 	// Calculate complexity
 	bodyNode := node.ChildByFieldName("body")
 	if bodyNode != nil {
-		fm.Complexity = calculateComplexity(bodyNode)
+		fm.Complexity = calculateComplexity(bodyNode, content)
 	} else {
 		fm.Complexity = 1
 	}
@@ -277,7 +277,7 @@ func (p *JavaScriptParser) extractMethodDefinition(node *sitter.Node, content []
 	// Calculate complexity
 	bodyNode := node.ChildByFieldName("body")
 	if bodyNode != nil {
-		fm.Complexity = calculateComplexity(bodyNode)
+		fm.Complexity = calculateComplexity(bodyNode, content)
 	} else {
 		fm.Complexity = 1
 	}
@@ -370,7 +370,7 @@ func (p *JavaScriptParser) extractArrowOrFunctionExpression(node *sitter.Node, c
 	// Calculate complexity
 	bodyNode := node.ChildByFieldName("body")
 	if bodyNode != nil {
-		fm.Complexity = calculateComplexity(bodyNode)
+		fm.Complexity = calculateComplexity(bodyNode, content)
 	} else {
 		fm.Complexity = 1
 	}
@@ -399,12 +399,12 @@ func countParameters(node *sitter.Node, _ []byte) int {
 }
 
 // calculateComplexity calculates cyclomatic complexity for a function body.
-func calculateComplexity(node *sitter.Node) int {
+func calculateComplexity(node *sitter.Node, content []byte) int {
 	complexity := 1 // Base complexity
 
 	var walk func(n *sitter.Node)
 	walk = func(n *sitter.Node) {
-		complexity += complexityIncrement(n.Kind())
+		complexity += complexityIncrement(n, content)
 
 		for i := uint(0); i < n.ChildCount(); i++ {
 			if child := n.Child(i); child != nil {
@@ -417,18 +417,31 @@ func calculateComplexity(node *sitter.Node) int {
 	return complexity
 }
 
-// complexityIncrement returns the complexity contribution for a given node kind.
-func complexityIncrement(kind string) int {
-	switch kind {
+// complexityIncrement returns the complexity contribution for a given node.
+func complexityIncrement(node *sitter.Node, content []byte) int {
+	switch node.Kind() {
 	case "if_statement",
-		"for_statement", "for_in_statement",
+		"for_statement", "for_in_statement", "for_of_statement",
 		"while_statement", "do_statement",
 		"switch_case",
 		"catch_clause",
 		"ternary_expression", "conditional_expression":
 		return 1
 	case "binary_expression":
-		// Will check for && or || operators in the caller
+		// Check for logical operators && and || which create decision points
+		for i := uint(0); i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			if child != nil && child.Kind() == "&&" || child.Kind() == "||" {
+				return 1
+			}
+			// Also check the actual text for operators
+			if child != nil && child.IsNamed() == false {
+				op := string(content[child.StartByte():child.EndByte()])
+				if op == "&&" || op == "||" {
+					return 1
+				}
+			}
+		}
 		return 0
 	}
 	return 0

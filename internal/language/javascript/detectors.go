@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
@@ -74,8 +75,7 @@ func (r *JavaScriptDetectorRunner) parseFile(path string, content []byte) (*sitt
 
 // isTSXFile returns true if the file is a TSX or JSX file.
 func isTSXFile(path string) bool {
-	ext := path[len(path)-4:]
-	return ext == ".tsx" || ext == ".jsx"
+	return strings.HasSuffix(path, ".tsx") || strings.HasSuffix(path, ".jsx")
 }
 
 // detectFunctionIssues runs all detectors on a single function.
@@ -325,7 +325,7 @@ func calculateMaxNestingDepth(node *sitter.Node) int {
 // isNestingConstruct returns true if the node kind increases nesting depth.
 func isNestingConstruct(kind string) bool {
 	switch kind {
-	case "if_statement", "for_statement", "for_in_statement",
+	case "if_statement", "for_statement", "for_in_statement", "for_of_statement",
 		"while_statement", "do_statement",
 		"try_statement", "with_statement", "switch_statement":
 		return true
