@@ -377,22 +377,30 @@ func areCyclesEquivalent(cycle1, cycle2 []string) bool {
 }
 
 // normalizeCycle rotates the cycle to start with the smallest element.
+// Cycles are represented as [a, b, c, a] where the last element closes the cycle.
 func normalizeCycle(cycle []string) []string {
-	if len(cycle) == 0 {
+	if len(cycle) <= 1 {
 		return cycle
 	}
 
+	// The last element is the closing element (same as first), so we only
+	// consider the first n-1 elements when finding the minimum
+	n := len(cycle) - 1
+
 	minIdx := 0
-	for i := 1; i < len(cycle); i++ {
+	for i := 1; i < n; i++ {
 		if cycle[i] < cycle[minIdx] {
 			minIdx = i
 		}
 	}
 
+	// Build normalized cycle: rotate to start with min element, then close with it
 	normalized := make([]string, len(cycle))
-	for i := range cycle {
-		normalized[i] = cycle[(minIdx+i)%len(cycle)]
+	for i := 0; i < n; i++ {
+		normalized[i] = cycle[(minIdx+i)%n]
 	}
+	// Close the cycle with the starting element
+	normalized[n] = normalized[0]
 
 	return normalized
 }

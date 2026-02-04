@@ -367,6 +367,57 @@ func TestComplexityCalculation(t *testing.T) {
 	assert.Equal(t, 4, metrics.Functions[0].Complexity, "complexity should be 4")
 }
 
+func TestComplexityWithLogicalOperators(t *testing.T) {
+	p := NewParser()
+
+	// Test that && and || operators contribute to complexity
+	content := `function testLogicalOps(a: boolean, b: boolean, c: boolean): boolean {
+    if (a && b) {
+        return true;
+    }
+    if (a || b || c) {
+        return true;
+    }
+    return a && b && c;
+}
+`
+	tmpFile := filepath.Join(t.TempDir(), "logical.ts")
+	err := os.WriteFile(tmpFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	metrics, err := p.ParseFile(tmpFile)
+	require.NoError(t, err)
+	require.Len(t, metrics.Functions, 1)
+
+	// Base (1) + if (1) + && (1) + if (1) + || (1) + || (1) + && (1) + && (1) = 8
+	assert.Equal(t, 8, metrics.Functions[0].Complexity, "complexity should include logical operators")
+}
+
+func TestComplexityWithForOfLoop(t *testing.T) {
+	p := NewParser()
+
+	// Test that for...of loops contribute to complexity
+	content := `function testForOf(items: string[]): void {
+    for (const item of items) {
+        console.log(item);
+    }
+    for (const [key, value] of Object.entries({ a: 1 })) {
+        console.log(key, value);
+    }
+}
+`
+	tmpFile := filepath.Join(t.TempDir(), "forof.ts")
+	err := os.WriteFile(tmpFile, []byte(content), 0644)
+	require.NoError(t, err)
+
+	metrics, err := p.ParseFile(tmpFile)
+	require.NoError(t, err)
+	require.Len(t, metrics.Functions, 1)
+
+	// Base (1) + for-of (1) + for-of (1) = 3
+	assert.Equal(t, 3, metrics.Functions[0].Complexity, "complexity should include for...of loops")
+}
+
 func TestParameterCounting(t *testing.T) {
 	p := NewParser()
 
