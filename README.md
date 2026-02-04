@@ -14,14 +14,13 @@ A comprehensive CLI tool that analyzes codebases to provide actionable insights 
 |----------|---------|---------|---------------|----------|--------------|
 | **Go** | Go AST | Full | Full | Yes | Yes |
 | **Python** | tree-sitter | Full | Full | No | No |
-
-Additional languages may be added based on user feedback.
+| **JavaScript/TypeScript** | tree-sitter | Full | Full | Yes (Jest/Vitest) | Yes |
 
 ## Features
 
 ### Multi-Language Support
 
-- **Automatic Detection**: Detects project language from manifest files (`go.mod`, `pyproject.toml`, `requirements.txt`, `setup.py`)
+- **Automatic Detection**: Detects project language from manifest files (`go.mod`, `pyproject.toml`, `requirements.txt`, `setup.py`, `package.json`, `tsconfig.json`)
 - **Explicit Selection**: Use `--language` flag to specify language manually
 - **Extensible Architecture**: Language provider system makes adding new languages straightforward
 
@@ -126,6 +125,9 @@ code-review-assistant analyze /path/to/go/project
 
 # Python project (detected via requirements.txt, pyproject.toml, or setup.py)
 code-review-assistant analyze /path/to/python/project
+
+# JavaScript/TypeScript project (detected via package.json or tsconfig.json)
+code-review-assistant analyze /path/to/js/project
 ```
 
 ### Explicit Language Selection
@@ -136,6 +138,9 @@ code-review-assistant analyze . --language go
 
 # Explicitly analyze as Python
 code-review-assistant analyze . --language python
+
+# Explicitly analyze as JavaScript/TypeScript
+code-review-assistant analyze . --language javascript
 ```
 
 ### Output Formats
@@ -200,12 +205,37 @@ Default exclude patterns:
 **/tests/**
 ```
 
+### JavaScript/TypeScript
+
+Tree-sitter based parsing with:
+- Function declarations, arrow functions, and methods
+- Class field extraction with initializers
+- JSX/TSX support
+- Test coverage via Jest or Vitest (reads coverage-summary.json)
+- Dependency analysis with Node.js builtin detection
+- Circular dependency detection
+
+Default exclude patterns:
+```
+**/node_modules/**
+**/dist/**
+**/build/**
+**/.next/**
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+**/__tests__/**
+**/*.d.ts
+**/*.min.js
+```
+
 ## Configuration
 
 Create a `config.yaml` file in your project root or `~/.cra/config.yaml` for global settings:
 
 ```yaml
-# Language selection (auto, go, python)
+# Language selection (auto, go, python, javascript)
 language: "auto"
 
 analysis:
@@ -225,8 +255,8 @@ analysis:
   max_return_statements: 3       # Maximum return statements per function
   detect_magic_numbers: true     # Detect numeric literals
 
-  # Go-specific settings
-  enable_coverage: true          # Run go test -cover
+  # Coverage and dependency settings (Go and JavaScript/TypeScript)
+  enable_coverage: true          # Run test coverage analysis
   min_coverage_threshold: 50.0   # Minimum coverage percentage (0-100)
   coverage_timeout_seconds: 30   # Timeout for test execution per package
   max_imports: 10                # Maximum imports per package
@@ -265,7 +295,7 @@ code-review-assistant analyze [path] [flags]
 ```
 
 **Language Flags:**
-- `--language, -l` - Language to analyze: auto, go, python (default: auto)
+- `--language, -l` - Language to analyze: auto, go, python, javascript (default: auto)
 
 **General Flags:**
 - `--config, -c` - Path to config file (default: ./config.yaml or ~/.cra/config.yaml)
@@ -366,11 +396,12 @@ CLI (Cobra) → Orchestrator → Language Provider → Parser → Analyzer → R
 - **Language Provider**: Abstracts language-specific parsing and analysis
   - **Go Provider**: Uses Go's `go/ast` package
   - **Python Provider**: Uses tree-sitter for parsing
+  - **JavaScript/TypeScript Provider**: Uses tree-sitter with TypeScript grammar
 - **Parser**: Extracts metrics (LOC, functions, imports, complexity) per language
 - **Analyzer**: Aggregates metrics, applies thresholds, coordinates sub-analyzers
   - **Detector Runner**: Language-specific anti-pattern detection
-  - **Coverage Runner**: Language-specific test coverage (Go only currently)
-  - **Dependency Analyzer**: Language-specific dependency analysis (Go only currently)
+  - **Coverage Runner**: Language-specific test coverage (Go, JavaScript/TypeScript)
+  - **Dependency Analyzer**: Language-specific dependency analysis (Go, JavaScript/TypeScript)
 - **Reporter**: Formats and outputs results in console, Markdown, JSON, or HTML
 - **Storage**: Persists reports for historical tracking (file or SQLite backend)
 - **Comparator**: Compares current and previous reports, detects trends
@@ -393,10 +424,16 @@ code-review-assistant/
 │   │   ├── golang/               # Go language support
 │   │   │   ├── provider.go
 │   │   │   └── detectors.go
-│   │   └── python/               # Python language support
+│   │   ├── python/               # Python language support
+│   │   │   ├── provider.go
+│   │   │   ├── parser.go
+│   │   │   └── detectors.go
+│   │   └── javascript/           # JavaScript/TypeScript language support
 │   │       ├── provider.go
 │   │       ├── parser.go
-│   │       └── detectors.go
+│   │       ├── detectors.go
+│   │       ├── coverage.go
+│   │       └── dependencies.go
 │   ├── parser/                   # Go AST parsing (legacy, used by Go provider)
 │   ├── analyzer/                 # Analysis and aggregation logic
 │   │   └── detectors/            # Anti-pattern detectors
@@ -412,7 +449,8 @@ code-review-assistant/
 │   └── constants/                # Shared constants
 ├── testdata/
 │   ├── sample/                   # Go test fixtures
-│   └── python/                   # Python test fixtures
+│   ├── python/                   # Python test fixtures
+│   └── javascript/               # JavaScript/TypeScript test fixtures
 ├── main.go
 └── README.md
 ```
@@ -515,7 +553,7 @@ code-review-assistant analyze . --save-report --storage-path /custom/path
 
 Future enhancements will be prioritized based on user feedback:
 
-- Additional language support (TypeScript, JavaScript, Rust, etc.)
+- Additional language support (Rust, Java, C#, etc.)
 - Git history integration and code churn detection
 - Multi-repository analysis
 - Custom rules engine with plugin support

@@ -10,8 +10,9 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/daniel-munoz/code-review-assistant/internal/git"
 	"github.com/daniel-munoz/code-review-assistant/internal/language"
-	_ "github.com/daniel-munoz/code-review-assistant/internal/language/golang" // Register Go language
-	_ "github.com/daniel-munoz/code-review-assistant/internal/language/python" // Register Python language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/golang"     // Register Go language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/javascript" // Register JavaScript/TypeScript language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/python"     // Register Python language
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/reporter"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
@@ -62,6 +63,12 @@ func New(cfg *config.Config, targetPath string) (*Orchestrator, error) {
 	lang, err := getLanguage(cfg, targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect language: %w", err)
+	}
+
+	// Merge language-specific exclude patterns with config patterns
+	langPatterns := lang.DefaultExcludePatterns()
+	if len(langPatterns) > 0 {
+		cfg.Analysis.ExcludePatterns = mergeExcludePatterns(cfg.Analysis.ExcludePatterns, langPatterns)
 	}
 
 	// Get language-specific components
@@ -334,4 +341,25 @@ func (o *Orchestrator) Close() error {
 		return o.storage.Close()
 	}
 	return nil
+}
+
+// mergeExcludePatterns merges language-specific patterns with config patterns,
+// avoiding duplicates.
+func mergeExcludePatterns(configPatterns, langPatterns []string) []string {
+	seen := make(map[string]bool)
+	for _, p := range configPatterns {
+		seen[p] = true
+	}
+
+	result := make([]string, len(configPatterns))
+	copy(result, configPatterns)
+
+	for _, p := range langPatterns {
+		if !seen[p] {
+			result = append(result, p)
+			seen[p] = true
+		}
+	}
+
+	return result
 }
