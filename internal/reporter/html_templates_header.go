@@ -7,6 +7,7 @@ const htmlTemplateHeader = `<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Review Dashboard - {{.ProjectName}}</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='20' width='6' height='8' rx='1' fill='%233b82f6'/%3E%3Crect x='13' y='12' width='6' height='16' rx='1' fill='%233b82f6'/%3E%3Crect x='22' y='4' width='6' height='24' rx='1' fill='%233b82f6'/%3E%3C/svg%3E">
     <style>
         * {
             margin: 0;

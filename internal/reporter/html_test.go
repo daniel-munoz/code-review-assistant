@@ -84,6 +84,9 @@ func TestHTMLReporter_Report_MinimalResult(t *testing.T) {
 	assert.Contains(t, output, "<body>")
 	assert.Contains(t, output, "</body>")
 
+	// Verify favicon
+	assert.Contains(t, output, `<link rel="icon"`)
+
 	// Verify title
 	assert.Contains(t, output, "<title>Code Review Dashboard - project</title>")
 
