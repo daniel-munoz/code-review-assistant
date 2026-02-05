@@ -1,6 +1,6 @@
 # Code Review Assistant
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.1-blue)
 ![Go Version](https://img.shields.io/badge/go-1.22%2B-00ADD8)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
