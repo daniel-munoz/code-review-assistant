@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"sort"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer/detectors"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
@@ -279,6 +280,11 @@ func (ma *MetricsAnalyzer) processAllFilesParallel(result *AnalysisResult, metri
 		result.Issues = append(result.Issues, fr.issues...)
 		allFunctions = append(allFunctions, fr.functions...)
 	}
+
+	// Sort files by path for deterministic output ordering
+	sort.Slice(result.Files, func(i, j int) bool {
+		return result.Files[i].Path < result.Files[j].Path
+	})
 
 	return allFunctions
 }
