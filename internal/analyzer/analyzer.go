@@ -146,10 +146,19 @@ func (ma *MetricsAnalyzer) Analyze(projectPath string, metrics []*parserPkg.File
 
 // processAllFiles processes each file, collecting metrics and issues
 func (ma *MetricsAnalyzer) processAllFiles(result *AnalysisResult, metrics []*parserPkg.FileMetrics) []*parserPkg.FunctionMetrics {
+	var allFunctions []*parserPkg.FunctionMetrics
 	if ma.workers == 1 {
-		return ma.processAllFilesSequential(result, metrics)
+		allFunctions = ma.processAllFilesSequential(result, metrics)
+	} else {
+		allFunctions = ma.processAllFilesParallel(result, metrics)
 	}
-	return ma.processAllFilesParallel(result, metrics)
+
+	// Sort files by path for deterministic output ordering (applies to both modes)
+	sort.Slice(result.Files, func(i, j int) bool {
+		return result.Files[i].Path < result.Files[j].Path
+	})
+
+	return allFunctions
 }
 
 // processAllFilesSequential processes files one at a time (original implementation).
@@ -280,11 +289,6 @@ func (ma *MetricsAnalyzer) processAllFilesParallel(result *AnalysisResult, metri
 		result.Issues = append(result.Issues, fr.issues...)
 		allFunctions = append(allFunctions, fr.functions...)
 	}
-
-	// Sort files by path for deterministic output ordering
-	sort.Slice(result.Files, func(i, j int) bool {
-		return result.Files[i].Path < result.Files[j].Path
-	})
 
 	return allFunctions
 }

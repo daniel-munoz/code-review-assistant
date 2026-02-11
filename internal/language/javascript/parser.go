@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
@@ -229,19 +228,16 @@ func (p *JavaScriptParser) parseDirectoryParallel(rootPath string, excludePatter
 		pool.Close()
 	}()
 
-	// Collect results
+	// Collect results (single-threaded - no mutex needed)
 	var allMetrics []*parser.FileMetrics
 	var parseErrors []error
-	var mu sync.Mutex
 
 	for result := range pool.Results() {
-		mu.Lock()
 		if result.err != nil {
 			parseErrors = append(parseErrors, result.err)
 		} else if result.metrics != nil {
 			allMetrics = append(allMetrics, result.metrics)
 		}
-		mu.Unlock()
 	}
 
 	allErrors := append(walkErrors, parseErrors...)

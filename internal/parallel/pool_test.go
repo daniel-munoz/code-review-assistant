@@ -198,6 +198,23 @@ func TestWorkerPool_DoubleClose_Safe(t *testing.T) {
 	}
 }
 
+func TestWorkerPool_CloseWithoutStart(t *testing.T) {
+	pool := NewWorkerPool(2, func(x int) int { return x })
+
+	// Close without Start should not block and should close resultCh
+	pool.Close()
+
+	// Ranging over Results should complete immediately (channel closed)
+	count := 0
+	for range pool.Results() {
+		count++
+	}
+
+	if count != 0 {
+		t.Errorf("expected 0 results, got %d", count)
+	}
+}
+
 // TestWorkerPool_Race tests for data races using concurrent operations.
 // Run with: go test -race ./internal/parallel/
 func TestWorkerPool_Race(t *testing.T) {
