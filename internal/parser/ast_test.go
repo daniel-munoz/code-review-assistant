@@ -307,3 +307,45 @@ func TestComplexity(t *testing.T) {
 		}
 	}
 }
+
+// TestParseDirectory_ParallelVsSequential verifies that parallel parsing produces
+// the same results as sequential parsing (order-independent).
+func TestParseDirectory_ParallelVsSequential(t *testing.T) {
+	testDir := "../../testdata/sample"
+
+	// Parse sequentially (workers=1)
+	seqParser := NewParser(1)
+	seqMetrics, seqErrors := seqParser.ParseDirectory(testDir, []string{}, []string{".go"}, status.NewSilentReporter())
+
+	// Parse in parallel (workers=4)
+	parParser := NewParser(4)
+	parMetrics, parErrors := parParser.ParseDirectory(testDir, []string{}, []string{".go"}, status.NewSilentReporter())
+
+	// Should have same number of files
+	assert.Equal(t, len(seqMetrics), len(parMetrics), "parallel and sequential should find same number of files")
+
+	// Should have same number of errors
+	assert.Equal(t, len(seqErrors), len(parErrors), "parallel and sequential should have same number of errors")
+
+	// Build maps for order-independent comparison
+	seqFileMap := make(map[string]*FileMetrics)
+	for _, m := range seqMetrics {
+		seqFileMap[m.FilePath] = m
+	}
+
+	parFileMap := make(map[string]*FileMetrics)
+	for _, m := range parMetrics {
+		parFileMap[m.FilePath] = m
+	}
+
+	// Compare each file's metrics
+	for path, seqFile := range seqFileMap {
+		parFile, exists := parFileMap[path]
+		require.True(t, exists, "parallel should have file %s", path)
+
+		assert.Equal(t, seqFile.TotalLines, parFile.TotalLines, "TotalLines should match for %s", path)
+		assert.Equal(t, seqFile.CodeLines, parFile.CodeLines, "CodeLines should match for %s", path)
+		assert.Equal(t, seqFile.CommentLines, parFile.CommentLines, "CommentLines should match for %s", path)
+		assert.Equal(t, len(seqFile.Functions), len(parFile.Functions), "Function count should match for %s", path)
+	}
+}

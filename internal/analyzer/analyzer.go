@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
-	"sync"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer/detectors"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
@@ -269,19 +268,16 @@ func (ma *MetricsAnalyzer) processAllFilesParallel(result *AnalysisResult, metri
 		pool.Close()
 	}()
 
-	// Collect results - single collector goroutine
+	// Collect results (single-threaded - no mutex needed)
 	var allFunctions []*parserPkg.FunctionMetrics
-	var mu sync.Mutex
 
 	for fr := range pool.Results() {
-		mu.Lock()
 		result.TotalLines += fr.lines
 		result.TotalCodeLines += fr.codeLines
 		result.TotalFunctions += fr.funcCount
 		result.Files = append(result.Files, fr.analysis)
 		result.Issues = append(result.Issues, fr.issues...)
 		allFunctions = append(allFunctions, fr.functions...)
-		mu.Unlock()
 	}
 
 	return allFunctions

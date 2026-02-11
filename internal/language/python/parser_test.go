@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
 
@@ -355,4 +356,54 @@ class MyClass:
 	assert.Equal(t, 3, paramCounts["with_types"], "with_types should have 3 params")
 	assert.Equal(t, 2, paramCounts["with_args"], "with_args should have 2 params (*args, **kwargs)")
 	assert.Equal(t, 2, paramCounts["method"], "method should have 2 params (self not counted)")
+}
+
+// TestParseDirectory_ParallelVsSequential verifies that parallel parsing produces
+// the same results as sequential parsing (order-independent).
+func TestParseDirectory_ParallelVsSequential(t *testing.T) {
+	testDir := filepath.Join("..", "..", "..", "testdata", "python")
+	absDir, err := filepath.Abs(testDir)
+	require.NoError(t, err)
+
+	if _, err := os.Stat(absDir); os.IsNotExist(err) {
+		t.Skip("test data directory not found:", absDir)
+	}
+
+	extensions := []string{".py"}
+
+	// Parse sequentially (workers=1)
+	seqParser := NewParser(1)
+	seqMetrics, seqErrors := seqParser.ParseDirectory(absDir, []string{}, extensions, status.NewSilentReporter())
+
+	// Parse in parallel (workers=4)
+	parParser := NewParser(4)
+	parMetrics, parErrors := parParser.ParseDirectory(absDir, []string{}, extensions, status.NewSilentReporter())
+
+	// Should have same number of files
+	assert.Equal(t, len(seqMetrics), len(parMetrics), "parallel and sequential should find same number of files")
+
+	// Should have same number of errors
+	assert.Equal(t, len(seqErrors), len(parErrors), "parallel and sequential should have same number of errors")
+
+	// Build maps for order-independent comparison
+	seqFileMap := make(map[string]*parser.FileMetrics)
+	for _, m := range seqMetrics {
+		seqFileMap[m.FilePath] = m
+	}
+
+	parFileMap := make(map[string]*parser.FileMetrics)
+	for _, m := range parMetrics {
+		parFileMap[m.FilePath] = m
+	}
+
+	// Compare each file's metrics
+	for path, seqFile := range seqFileMap {
+		parFile, exists := parFileMap[path]
+		require.True(t, exists, "parallel should have file %s", path)
+
+		assert.Equal(t, seqFile.TotalLines, parFile.TotalLines, "TotalLines should match for %s", path)
+		assert.Equal(t, seqFile.CodeLines, parFile.CodeLines, "CodeLines should match for %s", path)
+		assert.Equal(t, seqFile.CommentLines, parFile.CommentLines, "CommentLines should match for %s", path)
+		assert.Equal(t, len(seqFile.Functions), len(parFile.Functions), "Function count should match for %s", path)
+	}
 }

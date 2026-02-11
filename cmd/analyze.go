@@ -96,7 +96,7 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&showStatus, "show-status", false, "force enable status reporting (even when piped)")
 
 	// Parallel processing flags
-	analyzeCmd.Flags().IntVar(&workerCount, "workers", -1, "number of parallel workers (0=auto, 1=sequential)")
+	analyzeCmd.Flags().IntVar(&workerCount, "workers", -1, "number of parallel workers (-1=use config, 0=auto, 1=sequential)")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
