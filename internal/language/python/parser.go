@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	python "github.com/tree-sitter/tree-sitter-python/bindings/go"
@@ -206,19 +205,16 @@ func (p *PythonParser) parseDirectoryParallel(rootPath string, excludePatterns [
 		pool.Close()
 	}()
 
-	// Collect results
+	// Collect results (single-threaded - no mutex needed)
 	var allMetrics []*parser.FileMetrics
 	var parseErrors []error
-	var mu sync.Mutex
 
 	for result := range pool.Results() {
-		mu.Lock()
 		if result.err != nil {
 			parseErrors = append(parseErrors, result.err)
 		} else if result.metrics != nil {
 			allMetrics = append(allMetrics, result.metrics)
 		}
-		mu.Unlock()
 	}
 
 	allErrors := append(walkErrors, parseErrors...)

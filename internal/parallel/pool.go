@@ -20,25 +20,38 @@ import (
 //   - Work items are submitted via Submit()
 //   - Results are collected via the Results() channel
 //
-// Example usage:
+// Example usage (drain results concurrently to avoid deadlock with large inputs):
 //
 //	pool := NewWorkerPool(4, func(path string) *FileMetrics {
 //	    return parseFile(path)
 //	})
 //	pool.Start()
+//
+//	// Drain results in a separate goroutine
+//	var wg sync.WaitGroup
+//	wg.Add(1)
+//	go func() {
+//	    defer wg.Done()
+//	    for result := range pool.Results() {
+//	        // process result
+//	    }
+//	}()
+//
+//	// Submit work items
 //	for _, path := range paths {
 //	    pool.Submit(path)
 //	}
 //	pool.Close()
-//	for result := range pool.Results() {
-//	    // process result
-//	}
+//	wg.Wait()
+//
+// Alternatively, use ProcessAll() for simpler batch processing.
 type WorkerPool[T any, R any] struct {
 	workers   int
 	workCh    chan T
 	resultCh  chan R
 	wg        sync.WaitGroup
 	processor func(T) R
+	started   bool
 	closed    bool
 	mu        sync.Mutex
 }
@@ -68,7 +81,13 @@ func NewWorkerPool[T any, R any](workers int, processor func(T) R) *WorkerPool[T
 // work items have been processed. Each worker reads from the work
 // channel, processes items using the processor function, and writes
 // results to the result channel.
+//
+// Start must be called before Submit() or Results() are used.
 func (p *WorkerPool[T, R]) Start() {
+	p.mu.Lock()
+	p.started = true
+	p.mu.Unlock()
+
 	for i := 0; i < p.workers; i++ {
 		p.wg.Add(1)
 		go p.worker()
@@ -109,14 +128,22 @@ func (p *WorkerPool[T, R]) Submit(item T) {
 // processing remaining items and then exit. The result channel
 // will be closed after all workers have finished.
 //
+// If Close() is called without Start() having been called, the result
+// channel will be closed immediately.
+//
 // Close should only be called once. It is safe to call from any goroutine.
 func (p *WorkerPool[T, R]) Close() {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	if !p.closed {
 		p.closed = true
 		close(p.workCh)
+		// If Start() was never called, close resultCh directly to prevent
+		// consumers from blocking indefinitely
+		if !p.started {
+			close(p.resultCh)
+		}
 	}
-	p.mu.Unlock()
 }
 
 // Results returns the channel of results from processed work items.
