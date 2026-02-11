@@ -539,3 +539,74 @@ func TestAnalyze_MethodDetection(t *testing.T) {
 		assert.Equal(t, 1, result.TotalFunctions)
 	})
 }
+
+// TestAnalyze_ParallelVsSequential verifies that parallel analysis produces
+// the same aggregated results as sequential analysis.
+func TestAnalyze_ParallelVsSequential(t *testing.T) {
+	// Create test metrics with multiple files
+	metrics := []*parser.FileMetrics{
+		{
+			FilePath:     "file1.go",
+			PackageName:  "test",
+			TotalLines:   100,
+			CodeLines:    80,
+			CommentLines: 10,
+			BlankLines:   10,
+			Functions: []*parser.FunctionMetrics{
+				{Name: "Func1", Lines: 20, Complexity: 5, StartLine: 10},
+				{Name: "Func2", Lines: 30, Complexity: 8, StartLine: 40},
+			},
+		},
+		{
+			FilePath:     "file2.go",
+			PackageName:  "test",
+			TotalLines:   150,
+			CodeLines:    120,
+			CommentLines: 15,
+			BlankLines:   15,
+			Functions: []*parser.FunctionMetrics{
+				{Name: "Func3", Lines: 25, Complexity: 6, StartLine: 5},
+			},
+		},
+		{
+			FilePath:     "file3.go",
+			PackageName:  "test",
+			TotalLines:   80,
+			CodeLines:    60,
+			CommentLines: 10,
+			BlankLines:   10,
+			Functions: []*parser.FunctionMetrics{
+				{Name: "Func4", Lines: 15, Complexity: 3, StartLine: 20},
+				{Name: "Func5", Lines: 40, Complexity: 10, StartLine: 50},
+			},
+		},
+	}
+
+	// Analyze with sequential processing (workers=1)
+	seqCfg := config.Default()
+	seqCfg.Analysis.Workers = 1
+	seqAnalyzer := newTestAnalyzer(&seqCfg.Analysis)
+	seqResult, seqErr := seqAnalyzer.Analyze("/test/project", metrics)
+
+	// Analyze with parallel processing (workers=4)
+	parCfg := config.Default()
+	parCfg.Analysis.Workers = 4
+	parAnalyzer := newTestAnalyzer(&parCfg.Analysis)
+	parResult, parErr := parAnalyzer.Analyze("/test/project", metrics)
+
+	// Both should succeed
+	require.NoError(t, seqErr)
+	require.NoError(t, parErr)
+
+	// Aggregated totals should match
+	assert.Equal(t, seqResult.TotalFiles, parResult.TotalFiles, "TotalFiles should match")
+	assert.Equal(t, seqResult.TotalLines, parResult.TotalLines, "TotalLines should match")
+	assert.Equal(t, seqResult.TotalCodeLines, parResult.TotalCodeLines, "TotalCodeLines should match")
+	assert.Equal(t, seqResult.TotalFunctions, parResult.TotalFunctions, "TotalFunctions should match")
+
+	// Issue counts should match
+	assert.Equal(t, len(seqResult.Issues), len(parResult.Issues), "Issue count should match")
+
+	// File analysis count should match
+	assert.Equal(t, len(seqResult.Files), len(parResult.Files), "File analysis count should match")
+}

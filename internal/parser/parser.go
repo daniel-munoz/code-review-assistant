@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/parallel"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
@@ -242,19 +241,16 @@ func (p *ASTParser) parseDirectoryParallel(rootPath string, excludePatterns []st
 		pool.Close()
 	}()
 
-	// Collect results
+	// Collect results (single-threaded - no mutex needed)
 	var allMetrics []*FileMetrics
 	var parseErrors []error
-	var mu sync.Mutex
 
 	for result := range pool.Results() {
-		mu.Lock()
 		if result.err != nil {
 			parseErrors = append(parseErrors, result.err)
 		} else if result.metrics != nil {
 			allMetrics = append(allMetrics, result.metrics)
 		}
-		mu.Unlock()
 	}
 
 	// Combine walk errors and parse errors
