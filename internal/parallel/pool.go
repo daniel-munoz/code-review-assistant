@@ -96,11 +96,10 @@ func (p *WorkerPool[T, R]) worker() {
 // Panics if called after Close().
 func (p *WorkerPool[T, R]) Submit(item T) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.closed {
-		p.mu.Unlock()
 		panic("Submit called on closed pool")
 	}
-	p.mu.Unlock()
 	p.workCh <- item
 }
 
