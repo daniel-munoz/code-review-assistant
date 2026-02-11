@@ -36,6 +36,9 @@ var (
 	// Live status flags
 	quietMode  bool
 	showStatus bool
+
+	// Parallel processing flags
+	workerCount int
 )
 
 // analyzeCmd represents the analyze command
@@ -91,6 +94,9 @@ func init() {
 	// Live status flags
 	analyzeCmd.Flags().BoolVarP(&quietMode, "quiet", "q", false, "disable live status reporting")
 	analyzeCmd.Flags().BoolVar(&showStatus, "show-status", false, "force enable status reporting (even when piped)")
+
+	// Parallel processing flags
+	analyzeCmd.Flags().IntVar(&workerCount, "workers", 0, "number of parallel workers (0=auto, 1=sequential)")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
@@ -172,6 +178,9 @@ func addAnalysisOverrides(overrides map[string]interface{}) {
 	}
 	if len(excludePatterns) > 0 {
 		overrides["exclude"] = excludePatterns
+	}
+	if workerCount >= 0 {
+		overrides["workers"] = workerCount
 	}
 }
 

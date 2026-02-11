@@ -62,6 +62,9 @@ type AnalysisConfig struct {
 	MaxImports              int  `mapstructure:"max_imports"`
 	MaxExternalDependencies int  `mapstructure:"max_external_dependencies"`
 	DetectCircularDeps      bool `mapstructure:"detect_circular_deps"`
+
+	// Parallel processing
+	Workers int `mapstructure:"workers"` // 0=auto (runtime.NumCPU), 1=sequential, N=parallel
 }
 
 // OutputConfig contains settings that control report formatting and output.
@@ -139,6 +142,9 @@ func Default() *Config {
 			MaxImports:              constants.DefaultMaxImports,
 			MaxExternalDependencies: constants.DefaultMaxExternalDependencies,
 			DetectCircularDeps:      constants.DefaultDetectCircularDeps,
+
+			// Parallel processing defaults
+			Workers: 0, // Auto-detect CPU count
 		},
 		Output: OutputConfig{
 			Format:     "console",
@@ -204,6 +210,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("analysis.max_imports", defaults.Analysis.MaxImports)
 	v.SetDefault("analysis.max_external_dependencies", defaults.Analysis.MaxExternalDependencies)
 	v.SetDefault("analysis.detect_circular_deps", defaults.Analysis.DetectCircularDeps)
+	v.SetDefault("analysis.workers", defaults.Analysis.Workers)
 	v.SetDefault("output.format", defaults.Output.Format)
 	v.SetDefault("output.verbose", defaults.Output.Verbose)
 	v.SetDefault("output.output_file", defaults.Output.OutputFile)
@@ -282,6 +289,7 @@ func (c *Config) Merge(overrides map[string]interface{}) {
 	c.mergeAntiPatternSettings(overrides)
 	c.mergeCoverageSettings(overrides)
 	c.mergeDependencySettings(overrides)
+	c.mergeWorkerSettings(overrides)
 	c.mergeOutputSettings(overrides)
 	c.mergeStorageSettings(overrides)
 	c.mergeComparisonSettings(overrides)
@@ -321,6 +329,13 @@ func (c *Config) mergeDependencySettings(overrides map[string]interface{}) {
 	mergeIntIfPositive(&c.Analysis.MaxImports, overrides, "max_imports")
 	mergeIntIfPositive(&c.Analysis.MaxExternalDependencies, overrides, "max_external_dependencies")
 	mergeBool(&c.Analysis.DetectCircularDeps, overrides, "detect_circular_deps")
+}
+
+// mergeWorkerSettings merges parallel processing settings
+func (c *Config) mergeWorkerSettings(overrides map[string]interface{}) {
+	if val, ok := overrides["workers"].(int); ok && val >= 0 {
+		c.Analysis.Workers = val
+	}
 }
 
 // mergeOutputSettings merges output configuration settings

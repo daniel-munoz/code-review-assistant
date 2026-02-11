@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
+	"github.com/daniel-munoz/code-review-assistant/internal/parallel"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
 
@@ -47,13 +50,18 @@ type Parser interface {
 //
 // This implementation uses go/parser to build an AST and go/ast to traverse it,
 // extracting structural metrics without requiring the code to compile or run.
-type ASTParser struct{}
+type ASTParser struct {
+	Workers int // Number of parallel workers (0=auto, 1=sequential)
+}
 
 // NewParser creates a new Parser instance using AST-based parsing for Go.
 //
+// Parameters:
+//   - workers: number of parallel workers (0=auto uses runtime.NumCPU, 1=sequential)
+//
 // Returns an ASTParser that can parse individual Go files or entire directory trees.
-func NewParser() Parser {
-	return &ASTParser{}
+func NewParser(workers int) Parser {
+	return &ASTParser{Workers: workers}
 }
 
 // ParseFile parses a single Go file and extracts comprehensive metrics.
@@ -93,7 +101,23 @@ func (p *ASTParser) ParseFile(path string) (*FileMetrics, error) {
 //
 // The excludePatterns are matched against paths relative to rootPath.
 // The extensions parameter specifies which file extensions to include (e.g., [".go"]).
+//
+// If Workers is set to 1, parsing is sequential. Otherwise, files are parsed
+// in parallel using a worker pool.
 func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string, extensions []string, statusReporter status.Reporter) ([]*FileMetrics, []error) {
+	workers := p.Workers
+	if workers == 0 {
+		workers = runtime.NumCPU()
+	}
+
+	if workers == 1 {
+		return p.parseDirectorySequential(rootPath, excludePatterns, extensions, statusReporter)
+	}
+	return p.parseDirectoryParallel(rootPath, excludePatterns, extensions, statusReporter, workers)
+}
+
+// parseDirectorySequential parses files one at a time (original implementation).
+func (p *ASTParser) parseDirectorySequential(rootPath string, excludePatterns []string, extensions []string, statusReporter status.Reporter) ([]*FileMetrics, []error) {
 	var allMetrics []*FileMetrics
 	var errors []error
 	var fileCount int
@@ -148,6 +172,94 @@ func (p *ASTParser) ParseDirectory(rootPath string, excludePatterns []string, ex
 	}
 
 	return allMetrics, errors
+}
+
+// parseResult holds the result of parsing a single file.
+type parseResult struct {
+	metrics *FileMetrics
+	err     error
+}
+
+// parseDirectoryParallel parses files concurrently using a worker pool.
+func (p *ASTParser) parseDirectoryParallel(rootPath string, excludePatterns []string, extensions []string, statusReporter status.Reporter, workers int) ([]*FileMetrics, []error) {
+	// Phase 1: Discover all files to parse
+	statusReporter.Update("[PARSE] Discovering files...")
+	var filePaths []string
+	var walkErrors []error
+
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			walkErrors = append(walkErrors, fmt.Errorf("error accessing path %s: %w", path, err))
+			return nil
+		}
+
+		if info.IsDir() {
+			if shouldExclude(path, rootPath, excludePatterns) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if !hasMatchingExtension(path, extensions) {
+			return nil
+		}
+
+		if shouldExclude(path, rootPath, excludePatterns) {
+			return nil
+		}
+
+		filePaths = append(filePaths, path)
+		return nil
+	})
+
+	if err != nil {
+		walkErrors = append(walkErrors, fmt.Errorf("error walking directory: %w", err))
+	}
+
+	if len(filePaths) == 0 {
+		return nil, walkErrors
+	}
+
+	// Phase 2: Parse files in parallel with progress reporting
+	progressReporter := parallel.NewProgressReporter(statusReporter, "[PARSE] Parsing files", len(filePaths))
+
+	// Create worker pool
+	pool := parallel.NewWorkerPool(workers, func(path string) parseResult {
+		metrics, parseErr := p.ParseFile(path)
+		progressReporter.RecordProgress(filepath.Base(path))
+		if parseErr != nil {
+			return parseResult{err: fmt.Errorf("error parsing %s: %w", path, parseErr)}
+		}
+		return parseResult{metrics: metrics}
+	})
+	pool.Start()
+
+	// Submit all files in a goroutine to avoid blocking
+	go func() {
+		for _, path := range filePaths {
+			pool.Submit(path)
+		}
+		pool.Close()
+	}()
+
+	// Collect results
+	var allMetrics []*FileMetrics
+	var parseErrors []error
+	var mu sync.Mutex
+
+	for result := range pool.Results() {
+		mu.Lock()
+		if result.err != nil {
+			parseErrors = append(parseErrors, result.err)
+		} else if result.metrics != nil {
+			allMetrics = append(allMetrics, result.metrics)
+		}
+		mu.Unlock()
+	}
+
+	// Combine walk errors and parse errors
+	allErrors := append(walkErrors, parseErrors...)
+	return allMetrics, allErrors
 }
 
 // hasMatchingExtension checks if a path has one of the specified extensions.

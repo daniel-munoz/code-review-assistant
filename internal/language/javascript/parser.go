@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
+	"github.com/daniel-munoz/code-review-assistant/internal/parallel"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
@@ -19,13 +22,16 @@ import (
 type JavaScriptParser struct {
 	tsLanguage  *sitter.Language // TypeScript grammar for .ts, .js, .mjs, .cjs
 	tsxLanguage *sitter.Language // TSX grammar for .tsx, .jsx
+	workers     int              // Number of parallel workers (0=auto, 1=sequential)
 }
 
 // NewParser creates a new JavaScript/TypeScript parser.
-func NewParser() *JavaScriptParser {
+// The workers parameter controls parallel parsing (0=auto, 1=sequential).
+func NewParser(workers int) *JavaScriptParser {
 	return &JavaScriptParser{
 		tsLanguage:  sitter.NewLanguage(tsts.LanguageTypescript()),
 		tsxLanguage: sitter.NewLanguage(tsts.LanguageTSX()),
+		workers:     workers,
 	}
 }
 
@@ -94,7 +100,21 @@ func (p *JavaScriptParser) ParseFile(path string) (*parser.FileMetrics, error) {
 }
 
 // ParseDirectory recursively parses all JavaScript/TypeScript files in a directory.
+// If Workers is set to 1, parsing is sequential. Otherwise, files are parsed in parallel.
 func (p *JavaScriptParser) ParseDirectory(rootPath string, excludePatterns []string, extensions []string, statusReporter status.Reporter) ([]*parser.FileMetrics, []error) {
+	workers := p.workers
+	if workers == 0 {
+		workers = runtime.NumCPU()
+	}
+
+	if workers == 1 {
+		return p.parseDirectorySequential(rootPath, excludePatterns, extensions, statusReporter)
+	}
+	return p.parseDirectoryParallel(rootPath, excludePatterns, extensions, statusReporter, workers)
+}
+
+// parseDirectorySequential parses files one at a time (original implementation).
+func (p *JavaScriptParser) parseDirectorySequential(rootPath string, excludePatterns []string, extensions []string, statusReporter status.Reporter) ([]*parser.FileMetrics, []error) {
 	var allMetrics []*parser.FileMetrics
 	var errors []error
 	var fileCount int
@@ -141,6 +161,91 @@ func (p *JavaScriptParser) ParseDirectory(rootPath string, excludePatterns []str
 	}
 
 	return allMetrics, errors
+}
+
+// parseResult holds the result of parsing a single file.
+type parseResult struct {
+	metrics *parser.FileMetrics
+	err     error
+}
+
+// parseDirectoryParallel parses files concurrently using a worker pool.
+func (p *JavaScriptParser) parseDirectoryParallel(rootPath string, excludePatterns []string, extensions []string, statusReporter status.Reporter, workers int) ([]*parser.FileMetrics, []error) {
+	// Phase 1: Discover all files to parse
+	statusReporter.Update("[PARSE] Discovering files...")
+	var filePaths []string
+	var walkErrors []error
+
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			walkErrors = append(walkErrors, fmt.Errorf("error accessing path %s: %w", path, err))
+			return nil
+		}
+
+		if info.IsDir() {
+			if shouldExclude(path, rootPath, excludePatterns) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if !hasMatchingExtension(path, extensions) {
+			return nil
+		}
+
+		if shouldExclude(path, rootPath, excludePatterns) {
+			return nil
+		}
+
+		filePaths = append(filePaths, path)
+		return nil
+	})
+
+	if err != nil {
+		walkErrors = append(walkErrors, fmt.Errorf("error walking directory: %w", err))
+	}
+
+	if len(filePaths) == 0 {
+		return nil, walkErrors
+	}
+
+	// Phase 2: Parse files in parallel with progress reporting
+	progressReporter := parallel.NewProgressReporter(statusReporter, "[PARSE] Parsing files", len(filePaths))
+
+	pool := parallel.NewWorkerPool(workers, func(path string) parseResult {
+		metrics, parseErr := p.ParseFile(path)
+		progressReporter.RecordProgress(filepath.Base(path))
+		if parseErr != nil {
+			return parseResult{err: fmt.Errorf("error parsing %s: %w", path, parseErr)}
+		}
+		return parseResult{metrics: metrics}
+	})
+	pool.Start()
+
+	go func() {
+		for _, path := range filePaths {
+			pool.Submit(path)
+		}
+		pool.Close()
+	}()
+
+	// Collect results
+	var allMetrics []*parser.FileMetrics
+	var parseErrors []error
+	var mu sync.Mutex
+
+	for result := range pool.Results() {
+		mu.Lock()
+		if result.err != nil {
+			parseErrors = append(parseErrors, result.err)
+		} else if result.metrics != nil {
+			allMetrics = append(allMetrics, result.metrics)
+		}
+		mu.Unlock()
+	}
+
+	allErrors := append(walkErrors, parseErrors...)
+	return allMetrics, allErrors
 }
 
 // extractFunctions walks the AST and extracts function/method metrics.

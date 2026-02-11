@@ -45,7 +45,7 @@ func TestComplexityCalculation(t *testing.T) {
 		},
 	}
 
-	parser := NewParser()
+	parser := NewParser(1)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestComplexityCalculation(t *testing.T) {
 
 func TestComplexityMinimum(t *testing.T) {
 	// All functions should have complexity >= 1
-	parser := NewParser()
+	parser := NewParser(1)
 	metrics, err := parser.ParseFile("../../testdata/sample/main.go")
 	assert.NoError(t, err)
 

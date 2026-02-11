@@ -43,7 +43,8 @@ type Language interface {
 	DefaultExcludePatterns() []string
 
 	// Parser returns a parser for this language's source files.
-	Parser() parser.Parser
+	// The workers parameter controls parallel parsing (0=auto, 1=sequential).
+	Parser(workers int) parser.Parser
 
 	// DetectorRunner returns a runner for anti-pattern detectors.
 	// Each language handles its own AST internally - the analyzer never sees language-specific types.

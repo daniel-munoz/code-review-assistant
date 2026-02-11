@@ -12,13 +12,13 @@ import (
 )
 
 func TestNewParser(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 	require.NotNil(t, p, "parser should not be nil")
 	assert.NotNil(t, p.language, "language should be set")
 }
 
 func TestParseFile_SamplePython(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	// Get path to test data
 	testFile := filepath.Join("..", "..", "..", "testdata", "python", "sample.py")
@@ -64,7 +64,7 @@ func TestParseFile_SamplePython(t *testing.T) {
 }
 
 func TestParseFile_ComplexPython(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testFile := filepath.Join("..", "..", "..", "testdata", "python", "complex.py")
 	absPath, err := filepath.Abs(testFile)
@@ -118,7 +118,7 @@ func TestParseFile_ComplexPython(t *testing.T) {
 }
 
 func TestParseFile_Antipatterns(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testFile := filepath.Join("..", "..", "..", "testdata", "python", "antipatterns.py")
 	absPath, err := filepath.Abs(testFile)
@@ -172,7 +172,7 @@ func TestParseFile_Antipatterns(t *testing.T) {
 }
 
 func TestParseFile_NonPythonFile(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	_, err := p.ParseFile("/some/path/file.go")
 	assert.Error(t, err, "should error on non-Python file")
@@ -180,14 +180,14 @@ func TestParseFile_NonPythonFile(t *testing.T) {
 }
 
 func TestParseFile_NonExistent(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	_, err := p.ParseFile("/nonexistent/path/file.py")
 	assert.Error(t, err, "should error on non-existent file")
 }
 
 func TestParseDirectory(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testDir := filepath.Join("..", "..", "..", "testdata", "python")
 	absPath, err := filepath.Abs(testDir)
@@ -215,7 +215,7 @@ func TestParseDirectory(t *testing.T) {
 }
 
 func TestParseDirectory_WithExcludes(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testDir := filepath.Join("..", "..", "..", "testdata", "python")
 	absPath, err := filepath.Abs(testDir)
@@ -296,7 +296,7 @@ func TestCountLines(t *testing.T) {
 }
 
 func TestComplexityCalculation(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	// Create a temp file with known complexity
 	content := `def test_function(x):
@@ -319,7 +319,7 @@ func TestComplexityCalculation(t *testing.T) {
 }
 
 func TestParameterCounting(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	// Test with various parameter styles
 	content := `def simple(a, b, c):
