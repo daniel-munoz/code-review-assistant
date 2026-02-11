@@ -2,12 +2,16 @@ package analyzer
 
 import (
 	"fmt"
+	"path/filepath"
+	"runtime"
+	"sync"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer/detectors"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/daniel-munoz/code-review-assistant/internal/constants"
 	"github.com/daniel-munoz/code-review-assistant/internal/coverage"
 	"github.com/daniel-munoz/code-review-assistant/internal/dependencies"
+	"github.com/daniel-munoz/code-review-assistant/internal/parallel"
 	parserPkg "github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
@@ -44,12 +48,13 @@ type DependencyAnalyzerFactory func(projectPath string) (DependencyAnalyzer, err
 
 // MetricsAnalyzer implements Analyzer for basic metrics analysis
 type MetricsAnalyzer struct {
-	config              *config.AnalysisConfig
-	detectorRunner      DetectorRunner
-	coverageRunner      CoverageRunner
-	depAnalyzerFactory  DependencyAnalyzerFactory
-	status              status.Reporter
-	projectPath         string
+	config             *config.AnalysisConfig
+	detectorRunner     DetectorRunner
+	coverageRunner     CoverageRunner
+	depAnalyzerFactory DependencyAnalyzerFactory
+	status             status.Reporter
+	projectPath        string
+	workers            int // Number of parallel workers (0=auto, 1=sequential)
 }
 
 // NewAnalyzer creates a new MetricsAnalyzer with language-specific components.
@@ -67,12 +72,17 @@ func NewAnalyzer(
 	coverageRunner CoverageRunner,
 	depAnalyzerFactory DependencyAnalyzerFactory,
 ) Analyzer {
+	workers := cfg.Workers
+	if workers == 0 {
+		workers = runtime.NumCPU()
+	}
 	return &MetricsAnalyzer{
 		config:             cfg,
 		detectorRunner:     detectorRunner,
 		coverageRunner:     coverageRunner,
 		depAnalyzerFactory: depAnalyzerFactory,
 		status:             statusReporter,
+		workers:            workers,
 	}
 }
 
@@ -136,6 +146,14 @@ func (ma *MetricsAnalyzer) Analyze(projectPath string, metrics []*parserPkg.File
 
 // processAllFiles processes each file, collecting metrics and issues
 func (ma *MetricsAnalyzer) processAllFiles(result *AnalysisResult, metrics []*parserPkg.FileMetrics) []*parserPkg.FunctionMetrics {
+	if ma.workers == 1 {
+		return ma.processAllFilesSequential(result, metrics)
+	}
+	return ma.processAllFilesParallel(result, metrics)
+}
+
+// processAllFilesSequential processes files one at a time (original implementation).
+func (ma *MetricsAnalyzer) processAllFilesSequential(result *AnalysisResult, metrics []*parserPkg.FileMetrics) []*parserPkg.FunctionMetrics {
 	var allFunctions []*parserPkg.FunctionMetrics
 
 	for _, fileMetrics := range metrics {
@@ -160,6 +178,110 @@ func (ma *MetricsAnalyzer) processAllFiles(result *AnalysisResult, metrics []*pa
 		// Run anti-pattern detectors
 		detectorIssues := ma.runDetectors(fileMetrics)
 		result.Issues = append(result.Issues, detectorIssues...)
+	}
+
+	return allFunctions
+}
+
+// fileResult holds the result of processing a single file.
+type fileResult struct {
+	analysis  *FileAnalysis
+	issues    []*Issue
+	functions []*parserPkg.FunctionMetrics
+	lines     int
+	codeLines int
+	funcCount int
+}
+
+// processAllFilesParallel processes files concurrently using a worker pool.
+func (ma *MetricsAnalyzer) processAllFilesParallel(result *AnalysisResult, metrics []*parserPkg.FileMetrics) []*parserPkg.FunctionMetrics {
+	progressReporter := parallel.NewProgressReporter(ma.status, "[ANALYZE] Processing files", len(metrics))
+
+	// Create worker pool to process files
+	pool := parallel.NewWorkerPool(ma.workers, func(fileMetrics *parserPkg.FileMetrics) fileResult {
+		fr := fileResult{
+			lines:     fileMetrics.TotalLines,
+			codeLines: fileMetrics.CodeLines,
+			funcCount: len(fileMetrics.Functions),
+		}
+
+		// Create file analysis
+		fr.analysis = ma.createFileAnalysis(fileMetrics)
+
+		// Check file-level issues
+		if fr.analysis.LargeFile {
+			fr.issues = append(fr.issues, &Issue{
+				Severity:  "warning",
+				Type:      "large_file",
+				File:      fileMetrics.FilePath,
+				Line:      0,
+				Message:   "File exceeds size threshold",
+				Value:     fileMetrics.TotalLines,
+				Threshold: ma.config.LargeFileThreshold,
+			})
+		}
+
+		// Check function-level issues and collect functions
+		for _, fn := range fileMetrics.Functions {
+			fr.functions = append(fr.functions, fn)
+
+			if fn.Lines > ma.config.LongFunctionThreshold {
+				fr.issues = append(fr.issues, &Issue{
+					Severity:  "warning",
+					Type:      "long_function",
+					File:      fileMetrics.FilePath,
+					Line:      fn.StartLine,
+					Function:  fn.FullName(),
+					Message:   "Function exceeds length threshold",
+					Value:     fn.Lines,
+					Threshold: ma.config.LongFunctionThreshold,
+				})
+			}
+
+			if fn.Complexity > ma.config.ComplexityThreshold {
+				fr.issues = append(fr.issues, &Issue{
+					Severity:  "warning",
+					Type:      "high_complexity",
+					File:      fileMetrics.FilePath,
+					Line:      fn.StartLine,
+					Function:  fn.FullName(),
+					Message:   "Function has high cyclomatic complexity",
+					Value:     fn.Complexity,
+					Threshold: ma.config.ComplexityThreshold,
+				})
+			}
+		}
+
+		// Run anti-pattern detectors
+		detectorIssues := ma.runDetectors(fileMetrics)
+		fr.issues = append(fr.issues, detectorIssues...)
+
+		progressReporter.RecordProgress(filepath.Base(fileMetrics.FilePath))
+		return fr
+	})
+	pool.Start()
+
+	// Submit all files in a goroutine
+	go func() {
+		for _, fm := range metrics {
+			pool.Submit(fm)
+		}
+		pool.Close()
+	}()
+
+	// Collect results - single collector goroutine
+	var allFunctions []*parserPkg.FunctionMetrics
+	var mu sync.Mutex
+
+	for fr := range pool.Results() {
+		mu.Lock()
+		result.TotalLines += fr.lines
+		result.TotalCodeLines += fr.codeLines
+		result.TotalFunctions += fr.funcCount
+		result.Files = append(result.Files, fr.analysis)
+		result.Issues = append(result.Issues, fr.issues...)
+		allFunctions = append(allFunctions, fr.functions...)
+		mu.Unlock()
 	}
 
 	return allFunctions

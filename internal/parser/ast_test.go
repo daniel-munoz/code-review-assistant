@@ -116,7 +116,7 @@ func TestParseFile(t *testing.T) {
 		},
 	}
 
-	parser := NewParser()
+	parser := NewParser(1)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -145,7 +145,7 @@ func TestParseFile(t *testing.T) {
 }
 
 func TestParseDirectory(t *testing.T) {
-	parser := NewParser()
+	parser := NewParser(1)
 
 	t.Run("parse sample directory", func(t *testing.T) {
 		metricsSlice, errors := parser.ParseDirectory("../../testdata/sample", []string{}, []string{".go"}, status.NewSilentReporter())
@@ -287,7 +287,7 @@ func TestPatternMatching(t *testing.T) {
 }
 
 func TestComplexity(t *testing.T) {
-	parser := NewParser()
+	parser := NewParser(1)
 
 	metrics, err := parser.ParseFile("../../testdata/sample/util.go")
 	require.NoError(t, err)

@@ -51,9 +51,9 @@ func (p *PythonLanguage) DefaultExcludePatterns() []string {
 	}
 }
 
-// Parser returns a tree-sitter based Python parser.
-func (p *PythonLanguage) Parser() parser.Parser {
-	return NewParser()
+// Parser returns a tree-sitter based Python parser with the specified number of workers.
+func (p *PythonLanguage) Parser(workers int) parser.Parser {
+	return NewParser(workers)
 }
 
 // DetectorRunner returns a Python-specific detector runner.

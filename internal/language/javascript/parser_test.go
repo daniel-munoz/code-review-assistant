@@ -12,14 +12,14 @@ import (
 )
 
 func TestNewParser(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 	require.NotNil(t, p, "parser should not be nil")
 	assert.NotNil(t, p.tsLanguage, "TypeScript language should be set")
 	assert.NotNil(t, p.tsxLanguage, "TSX language should be set")
 }
 
 func TestParseFile_SampleTS(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testFile := filepath.Join("..", "..", "..", "testdata", "javascript", "sample.ts")
 	absPath, err := filepath.Abs(testFile)
@@ -71,7 +71,7 @@ func TestParseFile_SampleTS(t *testing.T) {
 }
 
 func TestParseFile_ComplexTS(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testFile := filepath.Join("..", "..", "..", "testdata", "javascript", "complex.ts")
 	absPath, err := filepath.Abs(testFile)
@@ -125,7 +125,7 @@ func TestParseFile_ComplexTS(t *testing.T) {
 }
 
 func TestParseFile_Antipatterns(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testFile := filepath.Join("..", "..", "..", "testdata", "javascript", "antipatterns.ts")
 	absPath, err := filepath.Abs(testFile)
@@ -197,7 +197,7 @@ func TestParseFile_Antipatterns(t *testing.T) {
 }
 
 func TestParseFile_JSX(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testFile := filepath.Join("..", "..", "..", "testdata", "javascript", "sample.jsx")
 	absPath, err := filepath.Abs(testFile)
@@ -225,7 +225,7 @@ func TestParseFile_JSX(t *testing.T) {
 }
 
 func TestParseFile_NonJSFile(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	_, err := p.ParseFile("/some/path/file.go")
 	assert.Error(t, err, "should error on non-JS/TS file")
@@ -233,14 +233,14 @@ func TestParseFile_NonJSFile(t *testing.T) {
 }
 
 func TestParseFile_NonExistent(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	_, err := p.ParseFile("/nonexistent/path/file.ts")
 	assert.Error(t, err, "should error on non-existent file")
 }
 
 func TestParseDirectory(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testDir := filepath.Join("..", "..", "..", "testdata", "javascript")
 	absPath, err := filepath.Abs(testDir)
@@ -268,7 +268,7 @@ func TestParseDirectory(t *testing.T) {
 }
 
 func TestParseDirectory_WithExcludes(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	testDir := filepath.Join("..", "..", "..", "testdata", "javascript")
 	absPath, err := filepath.Abs(testDir)
@@ -341,7 +341,7 @@ func TestCountLines(t *testing.T) {
 }
 
 func TestComplexityCalculation(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	// Create a temp file with known complexity
 	content := `function testFunction(x: number): number {
@@ -368,7 +368,7 @@ func TestComplexityCalculation(t *testing.T) {
 }
 
 func TestComplexityWithLogicalOperators(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	// Test that && and || operators contribute to complexity
 	content := `function testLogicalOps(a: boolean, b: boolean, c: boolean): boolean {
@@ -394,7 +394,7 @@ func TestComplexityWithLogicalOperators(t *testing.T) {
 }
 
 func TestComplexityWithForOfLoop(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	// Test that for...of loops contribute to complexity
 	content := `function testForOf(items: string[]): void {
@@ -419,7 +419,7 @@ func TestComplexityWithForOfLoop(t *testing.T) {
 }
 
 func TestParameterCounting(t *testing.T) {
-	p := NewParser()
+	p := NewParser(1)
 
 	content := `function simple(a: number, b: string, c: boolean): void {}
 

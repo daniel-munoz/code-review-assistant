@@ -46,9 +46,9 @@ func (g *GoLanguage) DefaultExcludePatterns() []string {
 	}
 }
 
-// Parser returns a Go AST-based parser.
-func (g *GoLanguage) Parser() parser.Parser {
-	return parser.NewParser()
+// Parser returns a Go AST-based parser with the specified number of workers.
+func (g *GoLanguage) Parser(workers int) parser.Parser {
+	return parser.NewParser(workers)
 }
 
 // DetectorRunner returns a Go-specific detector runner.

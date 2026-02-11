@@ -19,11 +19,11 @@ import (
 // mockLanguage implements language.Language for testing
 type mockLanguage struct{}
 
-func (m *mockLanguage) Name() string                      { return "mock" }
-func (m *mockLanguage) DisplayName() string               { return "Mock" }
-func (m *mockLanguage) Extensions() []string              { return []string{".go"} }
-func (m *mockLanguage) DefaultExcludePatterns() []string  { return nil }
-func (m *mockLanguage) Parser() parser.Parser             { return nil }
+func (m *mockLanguage) Name() string                     { return "mock" }
+func (m *mockLanguage) DisplayName() string              { return "Mock" }
+func (m *mockLanguage) Extensions() []string             { return []string{".go"} }
+func (m *mockLanguage) DefaultExcludePatterns() []string { return nil }
+func (m *mockLanguage) Parser(workers int) parser.Parser { return nil }
 func (m *mockLanguage) DetectorRunner(cfg *config.AnalysisConfig) language.DetectorRunner {
 	return nil
 }

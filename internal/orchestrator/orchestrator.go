@@ -72,7 +72,7 @@ func New(cfg *config.Config, targetPath string) (*Orchestrator, error) {
 	}
 
 	// Get language-specific components
-	p := lang.Parser()
+	p := lang.Parser(cfg.Analysis.Workers)
 	detectorRunner := lang.DetectorRunner(&cfg.Analysis)
 	coverageRunner := lang.CoverageRunner(&cfg.Analysis, statusReporter)
 

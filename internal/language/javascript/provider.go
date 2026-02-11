@@ -75,9 +75,9 @@ func (j *JavaScriptLanguage) DefaultExcludePatterns() []string {
 	}
 }
 
-// Parser returns a tree-sitter based JavaScript/TypeScript parser.
-func (j *JavaScriptLanguage) Parser() parser.Parser {
-	return NewParser()
+// Parser returns a tree-sitter based JavaScript/TypeScript parser with the specified number of workers.
+func (j *JavaScriptLanguage) Parser(workers int) parser.Parser {
+	return NewParser(workers)
 }
 
 // DetectorRunner returns a JavaScript/TypeScript-specific detector runner.
