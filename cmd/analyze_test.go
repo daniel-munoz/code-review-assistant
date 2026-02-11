@@ -321,6 +321,7 @@ func resetAnalyzeFlags() {
 	compareReport = false
 	storageBackend = "file"
 	storagePath = ""
+	workerCount = -1
 }
 
 func TestGetTargetPath(t *testing.T) {
@@ -482,7 +483,7 @@ func TestAddAnalysisOverrides(t *testing.T) {
 		excludePatterns = []string{"vendor/**"}
 
 		overrides := make(map[string]interface{})
-		addAnalysisOverrides(overrides)
+		addAnalysisOverrides(overrides, analyzeCmd)
 
 		assert.Equal(t, 800, overrides["large_file_threshold"])
 		assert.Equal(t, 60, overrides["long_function_threshold"])
@@ -494,7 +495,7 @@ func TestAddAnalysisOverrides(t *testing.T) {
 		resetAnalyzeFlags()
 
 		overrides := make(map[string]interface{})
-		addAnalysisOverrides(overrides)
+		addAnalysisOverrides(overrides, analyzeCmd)
 
 		assert.NotContains(t, overrides, "large_file_threshold")
 		assert.NotContains(t, overrides, "long_function_threshold")

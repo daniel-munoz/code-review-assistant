@@ -3,6 +3,7 @@ package parallel
 import (
 	"runtime"
 	"sort"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -250,7 +251,7 @@ func BenchmarkWorkerPool(b *testing.B) {
 		if workers == 0 {
 			name += "auto"
 		} else {
-			name += string(rune('0' + workers))
+			name += strconv.Itoa(workers)
 		}
 
 		b.Run(name, func(b *testing.B) {

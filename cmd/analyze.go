@@ -96,7 +96,7 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&showStatus, "show-status", false, "force enable status reporting (even when piped)")
 
 	// Parallel processing flags
-	analyzeCmd.Flags().IntVar(&workerCount, "workers", 0, "number of parallel workers (0=auto, 1=sequential)")
+	analyzeCmd.Flags().IntVar(&workerCount, "workers", -1, "number of parallel workers (0=auto, 1=sequential)")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
@@ -149,7 +149,7 @@ func buildOverridesMap(cmd *cobra.Command) map[string]interface{} {
 	overrides := make(map[string]interface{})
 
 	addLanguageOverrides(overrides, cmd)
-	addAnalysisOverrides(overrides)
+	addAnalysisOverrides(overrides, cmd)
 	addCoverageOverrides(overrides, cmd)
 	addDependencyOverrides(overrides, cmd)
 	addOutputOverrides(overrides)
@@ -166,7 +166,7 @@ func addLanguageOverrides(overrides map[string]interface{}, cmd *cobra.Command) 
 }
 
 // addAnalysisOverrides adds Phase 1 analysis threshold overrides
-func addAnalysisOverrides(overrides map[string]interface{}) {
+func addAnalysisOverrides(overrides map[string]interface{}, cmd *cobra.Command) {
 	if largeFileThreshold > 0 {
 		overrides["large_file_threshold"] = largeFileThreshold
 	}
@@ -179,7 +179,7 @@ func addAnalysisOverrides(overrides map[string]interface{}) {
 	if len(excludePatterns) > 0 {
 		overrides["exclude"] = excludePatterns
 	}
-	if workerCount >= 0 {
+	if cmd.Flags().Changed("workers") {
 		overrides["workers"] = workerCount
 	}
 }
