@@ -1,6 +1,6 @@
 # Code Review Assistant
 
-![Version](https://img.shields.io/badge/version-1.3.1-blue)
+![Version](https://img.shields.io/badge/version-1.3.2-blue)
 ![Go Version](https://img.shields.io/badge/go-1.22%2B-00ADD8)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -100,7 +100,7 @@ Modular detector system identifies common code smells:
 Install the latest stable release:
 
 ```bash
-go install github.com/daniel-munoz/code-review-assistant@v1.3.0
+go install github.com/daniel-munoz/code-review-assistant@v1.3.2
 ```
 
 Or build from source:
