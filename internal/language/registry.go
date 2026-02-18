@@ -73,6 +73,8 @@ func DetectLanguage(projectPath string) (Language, error) {
 		// JavaScript/TypeScript: package.json or tsconfig.json
 		{"package.json", "javascript"},
 		{"tsconfig.json", "javascript"},
+		// PHP: composer.json
+		{"composer.json", "php"},
 	}
 
 	for _, check := range manifestChecks {
@@ -83,7 +85,7 @@ func DetectLanguage(projectPath string) (Language, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("could not detect language in %s: no supported manifest files found (supported: Go, Python, JavaScript/TypeScript)", projectPath)
+	return nil, fmt.Errorf("could not detect language in %s: no supported manifest files found (supported: Go, Python, JavaScript/TypeScript, PHP)", projectPath)
 }
 
 // fileExists checks if a file exists at the given path.

@@ -12,6 +12,7 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/language"
 	_ "github.com/daniel-munoz/code-review-assistant/internal/language/golang"     // Register Go language
 	_ "github.com/daniel-munoz/code-review-assistant/internal/language/javascript" // Register JavaScript/TypeScript language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/php"        // Register PHP language
 	_ "github.com/daniel-munoz/code-review-assistant/internal/language/python"     // Register Python language
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/reporter"
