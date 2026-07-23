@@ -12,6 +12,7 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/language"
 	_ "github.com/daniel-munoz/code-review-assistant/internal/language/golang"     // Register Go language
 	_ "github.com/daniel-munoz/code-review-assistant/internal/language/javascript" // Register JavaScript/TypeScript language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/kotlin"     // Register Kotlin language
 	_ "github.com/daniel-munoz/code-review-assistant/internal/language/python"     // Register Python language
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/reporter"
@@ -23,24 +24,24 @@ import (
 // Orchestrator coordinates the complete code analysis pipeline.
 //
 // The orchestrator implements the analysis workflow:
-//   1. Load: Load previous report for comparison (if enabled)
-//   2. Parse: Discover and parse all source files for the detected language
-//   3. Analyze: Apply metrics and quality checks
-//   4. Compare: Compare with previous report (if enabled)
-//   5. Report: Format and output results (including comparison)
-//   6. Save: Store report for historical tracking (if enabled)
+//  1. Load: Load previous report for comparison (if enabled)
+//  2. Parse: Discover and parse all source files for the detected language
+//  3. Analyze: Apply metrics and quality checks
+//  4. Compare: Compare with previous report (if enabled)
+//  5. Report: Format and output results (including comparison)
+//  6. Save: Store report for historical tracking (if enabled)
 //
 // Each stage is delegated to specialized components (Parser, Analyzer, Reporter,
 // Storage, Comparator) that are configured and initialized based on the provided Config.
 type Orchestrator struct {
 	config     *config.Config
-	lang       language.Language       // Language provider
+	lang       language.Language // Language provider
 	parser     parser.Parser
 	analyzer   analyzer.Analyzer
 	reporter   reporter.Reporter
-	storage    storage.Storage         // Phase 3: Persistent storage (optional)
-	comparator *comparison.Comparator  // Phase 3: Historical comparison (optional)
-	status     status.Reporter         // Live status reporting
+	storage    storage.Storage        // Phase 3: Persistent storage (optional)
+	comparator *comparison.Comparator // Phase 3: Historical comparison (optional)
+	status     status.Reporter        // Live status reporting
 }
 
 // New creates a new Orchestrator with the given configuration.
