@@ -51,3 +51,11 @@ fun main() {
         println(blockingCall())
     }
 }
+
+class Runner {
+    fun main() {
+        runBlocking {
+            println("not an entry point")
+        }
+    }
+}

@@ -92,8 +92,10 @@ func (r *KotlinDetectorRunner) detectFunctionIssues(cfg *config.AnalysisConfig, 
 		issues = append(issues, detectNonNullAssertions(file, fn, bodyNode)...)
 	}
 
-	// runBlocking inside fun main is the legitimate idiom - don't flag it there
-	if cfg.DetectRunBlocking && fn.Name != "main" {
+	// runBlocking inside a top-level fun main is the legitimate idiom - don't flag it there.
+	// (A @JvmStatic main in a companion object is also an entry point, but rare; the
+	// top-level check is the safer default.)
+	if cfg.DetectRunBlocking && !(fn.Name == "main" && fn.ReceiverType == "") {
 		issues = append(issues, detectRunBlocking(file, fn, bodyNode, content)...)
 	}
 
@@ -188,6 +190,10 @@ func detectNonNullAssertions(file *parser.FileMetrics, fn *parser.FunctionMetric
 }
 
 // detectRunBlocking flags runBlocking calls (thread-blocking coroutine bridge).
+// Note: this only matches plain-identifier calls (`runBlocking { ... }`). A
+// fully-qualified call such as `kotlinx.coroutines.runBlocking { }` has a
+// navigation_expression callee rather than a bare identifier and is an
+// accepted miss.
 func detectRunBlocking(file *parser.FileMetrics, fn *parser.FunctionMetrics, bodyNode *sitter.Node, content []byte) []*detectors.Issue {
 	var issues []*detectors.Issue
 
@@ -282,6 +288,9 @@ func calculateMaxNestingDepth(node *sitter.Node) int {
 }
 
 // isNestingConstruct returns true if the node kind increases nesting depth.
+// Note: `else if` chains parse as nested if_expression nodes, so each link in
+// the chain counts toward depth. This is inherent to the AST shape and is
+// consistent with how the Go and Python detectors treat else-if chains.
 func isNestingConstruct(kind string) bool {
 	switch kind {
 	case "if_expression", "for_statement", "while_statement",
