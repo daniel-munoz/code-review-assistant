@@ -110,6 +110,18 @@ func TestRunDetectors_RunBlocking(t *testing.T) {
 	}
 }
 
+func TestRunDetectors_RunBlockingInMethodNamedMain(t *testing.T) {
+	byType := issuesByType(runDetectorsOnFixture(t, defaultTestConfig()))
+
+	found := false
+	for _, issue := range byType["run_blocking"] {
+		if issue.Function == "Runner.main" {
+			found = true
+		}
+	}
+	assert.True(t, found, "runBlocking in a class method named main is not an entry point and should be flagged")
+}
+
 func TestRunDetectors_KotlinDetectorsDisabled(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.DetectNonNullAssertions = false
@@ -118,4 +130,13 @@ func TestRunDetectors_KotlinDetectorsDisabled(t *testing.T) {
 	byType := issuesByType(runDetectorsOnFixture(t, cfg))
 	assert.Empty(t, byType["non_null_assertion"])
 	assert.Empty(t, byType["run_blocking"])
+}
+
+func TestRunDetectors_RunBlockingDisabledIndependently(t *testing.T) {
+	cfg := defaultTestConfig()
+	cfg.DetectRunBlocking = false
+
+	byType := issuesByType(runDetectorsOnFixture(t, cfg))
+	assert.Empty(t, byType["run_blocking"], "run_blocking should be empty when only DetectRunBlocking is disabled")
+	assert.NotEmpty(t, byType["non_null_assertion"], "non_null_assertion should be unaffected when only DetectRunBlocking is disabled")
 }
