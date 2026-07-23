@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/language"
-	_ "github.com/daniel-munoz/code-review-assistant/internal/language/golang"  // Register Go language
-	_ "github.com/daniel-munoz/code-review-assistant/internal/language/kotlin"  // Register Kotlin language
-	_ "github.com/daniel-munoz/code-review-assistant/internal/language/python"  // Register Python language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/golang" // Register Go language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/kotlin" // Register Kotlin language
+	_ "github.com/daniel-munoz/code-review-assistant/internal/language/python" // Register Python language
 )
 
 func TestGet(t *testing.T) {
@@ -188,6 +188,19 @@ setup(name="test")
 		lang, err := language.DetectLanguage(tmpDir)
 		require.NoError(t, err)
 		assert.Equal(t, "go", lang.Name(), "existing manifest priority should be preserved")
+	})
+
+	t.Run("settings.gradle.kts takes priority among Gradle manifests", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		err := os.WriteFile(filepath.Join(tmpDir, "settings.gradle.kts"), []byte("rootProject.name = \"svc\"\n"), 0644)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(tmpDir, "build.gradle"), []byte("apply plugin: 'kotlin'\n"), 0644)
+		require.NoError(t, err)
+
+		lang, err := language.DetectLanguage(tmpDir)
+		require.NoError(t, err)
+		assert.Equal(t, "kotlin", lang.Name())
 	})
 
 	t.Run("returns error when no manifest found", func(t *testing.T) {
