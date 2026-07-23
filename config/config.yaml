@@ -1,5 +1,8 @@
 # Code Review Assistant - Configuration File
 
+# Language selection (auto, go, python, javascript, kotlin)
+language: auto
+
 analysis:
   # Patterns to exclude from analysis (glob patterns)
   exclude_patterns:
@@ -22,6 +25,8 @@ analysis:
   max_return_statements: 3       # Maximum return statements per function
   detect_magic_numbers: true     # Detect numeric literals (excluding 0, 1, -1)
   detect_duplicate_errors: true  # Detect repetitive error handling patterns
+  detect_non_null_assertions: true # Detect !! usage (Kotlin)
+  detect_run_blocking: true      # Detect runBlocking outside main (Kotlin)
 
   # Test coverage
   enable_coverage: true          # Run go test -cover to analyze test coverage
