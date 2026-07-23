@@ -15,12 +15,13 @@ A comprehensive CLI tool that analyzes codebases to provide actionable insights 
 | **Go** | Go AST | Full | Full | Yes | Yes |
 | **Python** | tree-sitter | Full | Full | No | No |
 | **JavaScript/TypeScript** | tree-sitter | Full | Full | Yes (Jest/Vitest) | Yes |
+| **Kotlin** | tree-sitter | Full | Full | No | No |
 
 ## Features
 
 ### Multi-Language Support
 
-- **Automatic Detection**: Detects project language from manifest files (`go.mod`, `pyproject.toml`, `requirements.txt`, `setup.py`, `package.json`, `tsconfig.json`)
+- **Automatic Detection**: Detects project language from manifest files (`go.mod`, `pyproject.toml`, `requirements.txt`, `setup.py`, `package.json`, `tsconfig.json`, `build.gradle`, `build.gradle.kts`)
 - **Explicit Selection**: Use `--language` flag to specify language manually
 - **Extensible Architecture**: Language provider system makes adding new languages straightforward
 
@@ -128,6 +129,9 @@ code-review-assistant analyze /path/to/python/project
 
 # JavaScript/TypeScript project (detected via package.json or tsconfig.json)
 code-review-assistant analyze /path/to/js/project
+
+# Kotlin project (detected via build.gradle.kts or build.gradle)
+code-review-assistant analyze /path/to/kotlin/project
 ```
 
 ### Explicit Language Selection
@@ -141,6 +145,9 @@ code-review-assistant analyze . --language python
 
 # Explicitly analyze as JavaScript/TypeScript
 code-review-assistant analyze . --language javascript
+
+# Explicitly analyze as Kotlin
+code-review-assistant analyze . --language kotlin
 ```
 
 ### Output Formats
@@ -230,12 +237,37 @@ Default exclude patterns:
 **/*.min.js
 ```
 
+### Kotlin
+
+Tree-sitter based parsing with:
+- Function and class/object/interface extraction (methods keep their enclosing type)
+- Enum class method extraction
+- Package name extraction from `package` declarations
+- Complexity including `when` branches, `&&`/`||`, and the elvis operator (`?:`)
+- Kotlin-specific detectors: `!!` non-null assertions and `runBlocking` usage
+  outside a top-level `fun main` (configurable via `detect_non_null_assertions` /
+  `detect_run_blocking`)
+
+Analysis covers `.kt` files only; `.kts` Gradle scripts are treated as build
+configuration and skipped.
+
+Default exclude patterns:
+```
+**/build/**
+**/.gradle/**
+**/generated/**
+**/src/test/**
+**/src/testFixtures/**
+**/*Test.kt
+**/*Spec.kt
+```
+
 ## Configuration
 
 Create a `config.yaml` file in your project root or `~/.cra/config.yaml` for global settings:
 
 ```yaml
-# Language selection (auto, go, python, javascript)
+# Language selection (auto, go, python, javascript, kotlin)
 language: "auto"
 
 analysis:
@@ -254,6 +286,8 @@ analysis:
   max_nesting_depth: 4           # Maximum nesting depth
   max_return_statements: 3       # Maximum return statements per function
   detect_magic_numbers: true     # Detect numeric literals
+  detect_non_null_assertions: true # Detect !! usage (Kotlin)
+  detect_run_blocking: true        # Detect runBlocking outside main (Kotlin)
 
   # Coverage and dependency settings (Go and JavaScript/TypeScript)
   enable_coverage: true          # Run test coverage analysis
@@ -295,7 +329,7 @@ code-review-assistant analyze [path] [flags]
 ```
 
 **Language Flags:**
-- `--language, -l` - Language to analyze: auto, go, python, javascript (default: auto)
+- `--language, -l` - Language to analyze: auto, go, python, javascript, kotlin (default: auto)
 
 **General Flags:**
 - `--config, -c` - Path to config file (default: ./config.yaml or ~/.cra/config.yaml)
@@ -397,6 +431,7 @@ CLI (Cobra) → Orchestrator → Language Provider → Parser → Analyzer → R
   - **Go Provider**: Uses Go's `go/ast` package
   - **Python Provider**: Uses tree-sitter for parsing
   - **JavaScript/TypeScript Provider**: Uses tree-sitter with TypeScript grammar
+  - **Kotlin Provider**: Uses tree-sitter with Kotlin grammar
 - **Parser**: Extracts metrics (LOC, functions, imports, complexity) per language
 - **Analyzer**: Aggregates metrics, applies thresholds, coordinates sub-analyzers
   - **Detector Runner**: Language-specific anti-pattern detection
@@ -428,12 +463,16 @@ code-review-assistant/
 │   │   │   ├── provider.go
 │   │   │   ├── parser.go
 │   │   │   └── detectors.go
-│   │   └── javascript/           # JavaScript/TypeScript language support
+│   │   ├── javascript/           # JavaScript/TypeScript language support
+│   │   │   ├── provider.go
+│   │   │   ├── parser.go
+│   │   │   ├── detectors.go
+│   │   │   ├── coverage.go
+│   │   │   └── dependencies.go
+│   │   └── kotlin/               # Kotlin language support
 │   │       ├── provider.go
 │   │       ├── parser.go
-│   │       ├── detectors.go
-│   │       ├── coverage.go
-│   │       └── dependencies.go
+│   │       └── detectors.go
 │   ├── parser/                   # Go AST parsing (legacy, used by Go provider)
 │   ├── analyzer/                 # Analysis and aggregation logic
 │   │   └── detectors/            # Anti-pattern detectors
@@ -450,7 +489,8 @@ code-review-assistant/
 ├── testdata/
 │   ├── sample/                   # Go test fixtures
 │   ├── python/                   # Python test fixtures
-│   └── javascript/               # JavaScript/TypeScript test fixtures
+│   ├── javascript/               # JavaScript/TypeScript test fixtures
+│   └── kotlin/                   # Kotlin test fixtures
 ├── main.go
 └── README.md
 ```
@@ -540,6 +580,19 @@ Add to config.yaml or use CLI:
 ```bash
 code-review-assistant analyze . --exclude "generated/**" --exclude "**/*.pb.go"
 ```
+
+### Gradle Projects and Language Detection
+
+Gradle manifests (`build.gradle`, `build.gradle.kts`) trigger Kotlin detection,
+with two caveats:
+
+- A Java-only Gradle project will be detected as Kotlin and report zero files,
+  because CRA does not yet support Java.
+- A Kotlin project that also contains a `package.json` (e.g. for tooling or a
+  frontend in the same repo) will be detected as JavaScript, since `package.json`
+  is checked first.
+
+In both cases, use `--language kotlin` (or `--language javascript`) to override.
 
 ### Storage Issues
 

@@ -51,13 +51,14 @@ The tool will parse source files in the specified directory, calculate various
 metrics, and identify potential issues such as large files, long functions,
 and low test coverage.
 
-Language is auto-detected by default. Currently supports Go, Python, and
-JavaScript/TypeScript.
+Language is auto-detected by default. Currently supports Go, Python,
+JavaScript/TypeScript, and Kotlin.
 
 Example usage:
   code-review-assistant analyze .
   code-review-assistant analyze /path/to/project
   code-review-assistant analyze . --language javascript
+  code-review-assistant analyze . --language kotlin
   code-review-assistant analyze . --large-file-threshold 1000
   code-review-assistant analyze . --exclude "generated/**" --verbose`,
 	Args: cobra.MaximumNArgs(1),
@@ -68,7 +69,7 @@ func init() {
 	rootCmd.AddCommand(analyzeCmd)
 
 	// Language flag
-	analyzeCmd.Flags().StringVarP(&languageFlag, "language", "l", "auto", "language to analyze (auto, go, python, javascript)")
+	analyzeCmd.Flags().StringVarP(&languageFlag, "language", "l", "auto", "language to analyze (auto, go, python, javascript, kotlin)")
 
 	// Local flags specific to analyze command
 	analyzeCmd.Flags().StringSliceVar(&excludePatterns, "exclude", []string{}, "additional exclude patterns (can be repeated)")

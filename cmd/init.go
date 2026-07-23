@@ -86,7 +86,7 @@ const defaultConfigYAML = `# Code Review Assistant Configuration
 # All settings shown are the defaults - uncomment and modify as needed.
 
 # Language to analyze
-# Options: auto, go, python, javascript
+# Options: auto, go, python, javascript, kotlin
 # "auto" will detect the language from project files (go.mod, package.json, etc.)
 language: auto
 
@@ -112,6 +112,8 @@ analysis:
   max_return_statements: 3        # Max return statements before warning (info level)
   detect_magic_numbers: true      # Flag numeric literals that should be constants
   detect_duplicate_errors: true   # Detect duplicated error handling
+  detect_non_null_assertions: true # Detect !! usage (Kotlin)
+  detect_run_blocking: true        # Detect runBlocking outside main (Kotlin)
 
   # Test coverage settings
   enable_coverage: true           # Run test coverage analysis
