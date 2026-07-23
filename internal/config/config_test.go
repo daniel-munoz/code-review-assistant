@@ -98,6 +98,8 @@ func TestLoadConfig_ValidConfigFile(t *testing.T) {
   max_return_statements: 4
   detect_magic_numbers: false
   detect_duplicate_errors: false
+  detect_non_null_assertions: false
+  detect_run_blocking: false
   enable_coverage: false
   min_coverage_threshold: 80.0
   coverage_timeout_seconds: 60
@@ -135,6 +137,8 @@ output:
 		assert.Equal(t, 4, cfg.Analysis.MaxReturnStatements)
 		assert.False(t, cfg.Analysis.DetectMagicNumbers)
 		assert.False(t, cfg.Analysis.DetectDuplicateErrors)
+		assert.False(t, cfg.Analysis.DetectNonNullAssertions)
+		assert.False(t, cfg.Analysis.DetectRunBlocking)
 	})
 
 	t.Run("loads Phase 2.3 settings", func(t *testing.T) {
@@ -240,11 +244,13 @@ func TestMerge(t *testing.T) {
 		{
 			name: "merge Phase 2.2 anti-pattern overrides",
 			overrides: map[string]interface{}{
-				"max_parameters":         7,
-				"max_nesting_depth":      5,
-				"max_return_statements":  4,
-				"detect_magic_numbers":   false,
-				"detect_duplicate_errors": false,
+				"max_parameters":             7,
+				"max_nesting_depth":          5,
+				"max_return_statements":      4,
+				"detect_magic_numbers":       false,
+				"detect_duplicate_errors":    false,
+				"detect_non_null_assertions": false,
+				"detect_run_blocking":        false,
 			},
 			validateConfig: func(t *testing.T, cfg *Config) {
 				assert.Equal(t, 7, cfg.Analysis.MaxParameters)
@@ -252,6 +258,8 @@ func TestMerge(t *testing.T) {
 				assert.Equal(t, 4, cfg.Analysis.MaxReturnStatements)
 				assert.False(t, cfg.Analysis.DetectMagicNumbers)
 				assert.False(t, cfg.Analysis.DetectDuplicateErrors)
+				assert.False(t, cfg.Analysis.DetectNonNullAssertions)
+				assert.False(t, cfg.Analysis.DetectRunBlocking)
 			},
 		},
 		{
@@ -270,9 +278,9 @@ func TestMerge(t *testing.T) {
 		{
 			name: "merge Phase 2.4 dependency overrides",
 			overrides: map[string]interface{}{
-				"max_imports":              20,
+				"max_imports":               20,
 				"max_external_dependencies": 15,
-				"detect_circular_deps":     false,
+				"detect_circular_deps":      false,
 			},
 			validateConfig: func(t *testing.T, cfg *Config) {
 				assert.Equal(t, 20, cfg.Analysis.MaxImports)
@@ -306,17 +314,17 @@ func TestMerge(t *testing.T) {
 		{
 			name: "merge all overrides at once",
 			overrides: map[string]interface{}{
-				"large_file_threshold":      1000,
-				"long_function_threshold":   75,
-				"complexity_threshold":      15,
-				"max_parameters":            7,
-				"enable_coverage":           false,
-				"min_coverage_threshold":    80.0,
-				"max_imports":               20,
-				"detect_circular_deps":      false,
-				"format":                    "json",
-				"verbose":                   true,
-				"exclude":                   []string{"custom/**"},
+				"large_file_threshold":    1000,
+				"long_function_threshold": 75,
+				"complexity_threshold":    15,
+				"max_parameters":          7,
+				"enable_coverage":         false,
+				"min_coverage_threshold":  80.0,
+				"max_imports":             20,
+				"detect_circular_deps":    false,
+				"format":                  "json",
+				"verbose":                 true,
+				"exclude":                 []string{"custom/**"},
 			},
 			validateConfig: func(t *testing.T, cfg *Config) {
 				assert.Equal(t, 1000, cfg.Analysis.LargeFileThreshold)
@@ -347,9 +355,9 @@ func TestMerge(t *testing.T) {
 		{
 			name: "boolean overrides work with false values",
 			overrides: map[string]interface{}{
-				"enable_coverage":       false,
-				"detect_circular_deps":  false,
-				"detect_magic_numbers":  false,
+				"enable_coverage":      false,
+				"detect_circular_deps": false,
+				"detect_magic_numbers": false,
 			},
 			validateConfig: func(t *testing.T, cfg *Config) {
 				// False values should be applied (not treated as zero values)
@@ -391,9 +399,9 @@ func TestMerge_TypeSafety(t *testing.T) {
 
 		// Try to override with wrong types
 		overrides := map[string]interface{}{
-			"large_file_threshold": "not a number",  // Should be int
-			"format":               123,             // Should be string
-			"verbose":              "true",          // Should be bool
+			"large_file_threshold": "not a number", // Should be int
+			"format":               123,            // Should be string
+			"verbose":              "true",         // Should be bool
 		}
 
 		cfg.Merge(overrides)
