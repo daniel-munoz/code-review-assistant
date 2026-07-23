@@ -10,8 +10,8 @@ import (
 	"runtime"
 	"strings"
 
-	sitter "github.com/tree-sitter/go-tree-sitter"
 	kotlinlang "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/parallel"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
