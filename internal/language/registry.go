@@ -55,6 +55,8 @@ func All() []Language {
 // Detection is based on the presence of language-specific manifest files:
 //   - go.mod → Go
 //   - pyproject.toml, setup.py, requirements.txt → Python
+//   - package.json, tsconfig.json → JavaScript/TypeScript
+//   - build.gradle.kts, settings.gradle.kts, build.gradle, settings.gradle → Kotlin
 //
 // Returns an error if no supported language can be detected.
 func DetectLanguage(projectPath string) (Language, error) {
@@ -73,6 +75,12 @@ func DetectLanguage(projectPath string) (Language, error) {
 		// JavaScript/TypeScript: package.json or tsconfig.json
 		{"package.json", "javascript"},
 		{"tsconfig.json", "javascript"},
+		// Kotlin: Gradle build files (checked after other manifests; a Java-only
+		// Gradle repo will also match - CRA has no Java provider to prefer)
+		{"settings.gradle.kts", "kotlin"},
+		{"build.gradle.kts", "kotlin"},
+		{"settings.gradle", "kotlin"},
+		{"build.gradle", "kotlin"},
 	}
 
 	for _, check := range manifestChecks {
@@ -83,7 +91,7 @@ func DetectLanguage(projectPath string) (Language, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("could not detect language in %s: no supported manifest files found (supported: Go, Python, JavaScript/TypeScript)", projectPath)
+	return nil, fmt.Errorf("could not detect language in %s: no supported manifest files found (supported: Go, Python, JavaScript/TypeScript, Kotlin)", projectPath)
 }
 
 // fileExists checks if a file exists at the given path.
