@@ -42,3 +42,11 @@ fun main() {
     println(max(1, 2))
     println(Instant.now())
 }
+
+enum class Status {
+    ACTIVE, BANNED;
+
+    fun describe(): String {
+        return name.lowercase()
+    }
+}

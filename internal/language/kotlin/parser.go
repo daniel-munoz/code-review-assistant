@@ -231,7 +231,12 @@ func (p *KotlinParser) extractDeclarations(node *sitter.Node, content []byte, me
 		case "class_declaration", "object_declaration":
 			// class_declaration covers classes and interfaces
 			name := declarationName(child, content)
-			if body := childOfKind(child, "class_body"); body != nil {
+			body := childOfKind(child, "class_body")
+			if body == nil {
+				// Enum classes use enum_class_body instead of class_body.
+				body = childOfKind(child, "enum_class_body")
+			}
+			if body != nil {
 				p.extractDeclarations(body, content, metrics, name)
 			}
 
