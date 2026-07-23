@@ -13,15 +13,15 @@ import (
 //
 // Configuration can be loaded from multiple sources with the following priority
 // (highest to lowest):
-//   1. CLI flags (set via Merge())
-//   2. Environment variables (prefixed with CRA_)
-//   3. Configuration file (YAML format)
-//   4. Default values (from Default())
+//  1. CLI flags (set via Merge())
+//  2. Environment variables (prefixed with CRA_)
+//  3. Configuration file (YAML format)
+//  4. Default values (from Default())
 //
 // This layered approach allows flexible configuration for different environments
 // while maintaining sensible defaults.
 type Config struct {
-	Language   string           `mapstructure:"language"`   // Language to analyze: "auto", "go", "python", etc.
+	Language   string           `mapstructure:"language"` // Language to analyze: "auto", "go", "python", etc.
 	Analysis   AnalysisConfig   `mapstructure:"analysis"`
 	Output     OutputConfig     `mapstructure:"output"`
 	Storage    StorageConfig    `mapstructure:"storage"`    // Phase 3: Persistent storage
@@ -40,23 +40,25 @@ type Config struct {
 // All threshold values can be overridden via CLI flags, environment variables,
 // or configuration files.
 type AnalysisConfig struct {
-	ExcludePatterns        []string `mapstructure:"exclude_patterns"`
-	LargeFileThreshold     int      `mapstructure:"large_file_threshold"`
-	LongFunctionThreshold  int      `mapstructure:"long_function_threshold"`
-	MinCommentRatio        float64  `mapstructure:"min_comment_ratio"`
-	ComplexityThreshold    int      `mapstructure:"complexity_threshold"`
+	ExcludePatterns       []string `mapstructure:"exclude_patterns"`
+	LargeFileThreshold    int      `mapstructure:"large_file_threshold"`
+	LongFunctionThreshold int      `mapstructure:"long_function_threshold"`
+	MinCommentRatio       float64  `mapstructure:"min_comment_ratio"`
+	ComplexityThreshold   int      `mapstructure:"complexity_threshold"`
 
 	// Anti-pattern detection
-	MaxParameters          int      `mapstructure:"max_parameters"`
-	MaxNestingDepth        int      `mapstructure:"max_nesting_depth"`
-	MaxReturnStatements    int      `mapstructure:"max_return_statements"`
-	DetectMagicNumbers     bool     `mapstructure:"detect_magic_numbers"`
-	DetectDuplicateErrors  bool     `mapstructure:"detect_duplicate_errors"`
+	MaxParameters           int  `mapstructure:"max_parameters"`
+	MaxNestingDepth         int  `mapstructure:"max_nesting_depth"`
+	MaxReturnStatements     int  `mapstructure:"max_return_statements"`
+	DetectMagicNumbers      bool `mapstructure:"detect_magic_numbers"`
+	DetectDuplicateErrors   bool `mapstructure:"detect_duplicate_errors"`
+	DetectNonNullAssertions bool `mapstructure:"detect_non_null_assertions"` // Kotlin: flag !! usage
+	DetectRunBlocking       bool `mapstructure:"detect_run_blocking"`        // Kotlin: flag runBlocking outside main
 
 	// Test coverage
-	EnableCoverage        bool    `mapstructure:"enable_coverage"`
-	MinCoverageThreshold  float64 `mapstructure:"min_coverage_threshold"`
-	CoverageTimeout       int     `mapstructure:"coverage_timeout_seconds"`
+	EnableCoverage       bool    `mapstructure:"enable_coverage"`
+	MinCoverageThreshold float64 `mapstructure:"min_coverage_threshold"`
+	CoverageTimeout      int     `mapstructure:"coverage_timeout_seconds"`
 
 	// Dependency analysis
 	MaxImports              int  `mapstructure:"max_imports"`
@@ -127,11 +129,13 @@ func Default() *Config {
 			ComplexityThreshold:   constants.DefaultComplexityThreshold,
 
 			// Anti-pattern detection defaults
-			MaxParameters:         constants.DefaultMaxParameters,
-			MaxNestingDepth:       constants.DefaultMaxNestingDepth,
-			MaxReturnStatements:   constants.DefaultMaxReturnStatements,
-			DetectMagicNumbers:    constants.DefaultDetectMagicNumbers,
-			DetectDuplicateErrors: constants.DefaultDetectDuplicateErrors,
+			MaxParameters:           constants.DefaultMaxParameters,
+			MaxNestingDepth:         constants.DefaultMaxNestingDepth,
+			MaxReturnStatements:     constants.DefaultMaxReturnStatements,
+			DetectMagicNumbers:      constants.DefaultDetectMagicNumbers,
+			DetectDuplicateErrors:   constants.DefaultDetectDuplicateErrors,
+			DetectNonNullAssertions: constants.DefaultDetectNonNullAssertions,
+			DetectRunBlocking:       constants.DefaultDetectRunBlocking,
 
 			// Test coverage defaults
 			EnableCoverage:       constants.DefaultEnableCoverage,
@@ -157,7 +161,7 @@ func Default() *Config {
 		Storage: StorageConfig{
 			Enabled:     false, // Phase 3: Opt-in
 			Backend:     "file",
-			Path:        "",    // Use default (~/.cra or ./.cra)
+			Path:        "", // Use default (~/.cra or ./.cra)
 			AutoSave:    false,
 			ProjectMode: false, // Use ~/.cra by default
 		},
@@ -172,9 +176,9 @@ func Default() *Config {
 // LoadConfig loads configuration from multiple sources and merges them.
 //
 // Configuration is loaded in the following order (later sources override earlier):
-//   1. Default values (from Default())
-//   2. Configuration file (YAML format)
-//   3. Environment variables (prefixed with CRA_)
+//  1. Default values (from Default())
+//  2. Configuration file (YAML format)
+//  3. Environment variables (prefixed with CRA_)
 //
 // Configuration File Search:
 // If configPath is provided, only that file is loaded. Otherwise, the loader
@@ -204,6 +208,8 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("analysis.max_return_statements", defaults.Analysis.MaxReturnStatements)
 	v.SetDefault("analysis.detect_magic_numbers", defaults.Analysis.DetectMagicNumbers)
 	v.SetDefault("analysis.detect_duplicate_errors", defaults.Analysis.DetectDuplicateErrors)
+	v.SetDefault("analysis.detect_non_null_assertions", defaults.Analysis.DetectNonNullAssertions)
+	v.SetDefault("analysis.detect_run_blocking", defaults.Analysis.DetectRunBlocking)
 	v.SetDefault("analysis.enable_coverage", defaults.Analysis.EnableCoverage)
 	v.SetDefault("analysis.min_coverage_threshold", defaults.Analysis.MinCoverageThreshold)
 	v.SetDefault("analysis.coverage_timeout_seconds", defaults.Analysis.CoverageTimeout)
@@ -315,6 +321,8 @@ func (c *Config) mergeAntiPatternSettings(overrides map[string]interface{}) {
 	mergeIntIfPositive(&c.Analysis.MaxReturnStatements, overrides, "max_return_statements")
 	mergeBool(&c.Analysis.DetectMagicNumbers, overrides, "detect_magic_numbers")
 	mergeBool(&c.Analysis.DetectDuplicateErrors, overrides, "detect_duplicate_errors")
+	mergeBool(&c.Analysis.DetectNonNullAssertions, overrides, "detect_non_null_assertions")
+	mergeBool(&c.Analysis.DetectRunBlocking, overrides, "detect_run_blocking")
 }
 
 // mergeCoverageSettings merges Phase 2.3 test coverage settings
