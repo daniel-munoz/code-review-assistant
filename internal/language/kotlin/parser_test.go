@@ -83,6 +83,11 @@ func TestParseFile_SampleKotlin(t *testing.T) {
 	assert.Equal(t, "Repository", save.ReceiverType)
 	assert.Equal(t, 1, save.Complexity, "bodyless interface method has base complexity")
 
+	// Enum class methods are collected too
+	describe := findFunction(metrics, "describe")
+	require.NotNil(t, describe, "should have describe method from enum class")
+	assert.Equal(t, "Status", describe.ReceiverType)
+
 	// Imports
 	assert.Contains(t, metrics.Imports, "java.time.Instant")
 	assert.Contains(t, metrics.Imports, "kotlin.math.max")
