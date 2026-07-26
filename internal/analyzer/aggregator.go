@@ -18,6 +18,7 @@ func calculateAggregateMetrics(fileMetrics []*parser.FileMetrics, allFunctions [
 	}
 
 	calculateFunctionAverages(metrics, allFunctions)
+	calculateMedians(metrics, allFunctions)
 	calculatePercentiles(metrics, allFunctions)
 	metrics.CommentRatio = calculateCommentRatio(fileMetrics)
 	metrics.LargestFiles = findLargestFiles(fileMetrics, constants.TopFilesLimit)
@@ -56,6 +57,36 @@ func calculatePercentiles(metrics *AggregateMetrics, allFunctions []*parser.Func
 	metrics.ComplexityP95 = calculateP95(allFunctions, func(fn *parser.FunctionMetrics) int {
 		return fn.Complexity
 	})
+}
+
+// calculateMedians calculates median function length and complexity
+func calculateMedians(metrics *AggregateMetrics, allFunctions []*parser.FunctionMetrics) {
+	if len(allFunctions) == 0 {
+		return
+	}
+
+	metrics.MedianFunctionLength = calculateMedian(allFunctions, func(fn *parser.FunctionMetrics) int {
+		return fn.Lines
+	})
+
+	metrics.MedianComplexity = calculateMedian(allFunctions, func(fn *parser.FunctionMetrics) int {
+		return fn.Lines
+	})
+}
+
+// calculateMedian calculates the median of a metric. For an even number of
+// values it returns the mean of the two middle values.
+func calculateMedian(functions []*parser.FunctionMetrics, getValue func(*parser.FunctionMetrics) int) int {
+	values := make([]int, len(functions))
+	for i, fn := range functions {
+		values[i] = getValue(fn)
+	}
+
+	mid := len(values) / 2
+	if len(values)%2 == 0 {
+		return (values[mid-1] + values[mid]) / 2
+	}
+	return values[mid]
 }
 
 // calculateP95 calculates the 95th percentile of a metric
