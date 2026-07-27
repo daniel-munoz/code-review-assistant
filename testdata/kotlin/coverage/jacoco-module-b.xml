@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<report name="module-b">
+  <package name="com/example/shared">
+    <counter type="LINE" missed="15" covered="5"/>
+  </package>
+</report>
