@@ -58,10 +58,9 @@ func (k *KotlinLanguage) DetectorRunner(cfg *config.AnalysisConfig) language.Det
 	return NewDetectorRunner(cfg)
 }
 
-// CoverageRunner returns nil as Kotlin coverage is not yet implemented.
-// Kotlin coverage support will be added in a future phase using Kover/JaCoCo reports.
+// CoverageRunner returns a Gradle-based (Kover/JaCoCo) coverage runner.
 func (k *KotlinLanguage) CoverageRunner(cfg *config.AnalysisConfig, statusReporter status.Reporter) language.CoverageRunner {
-	return nil
+	return NewCoverageRunner(cfg.CoverageTimeout, statusReporter)
 }
 
 // DependencyAnalyzer returns a Kotlin dependency analyzer grouping by
