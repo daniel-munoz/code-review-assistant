@@ -15,7 +15,7 @@ A comprehensive CLI tool that analyzes codebases to provide actionable insights 
 | **Go** | Go AST | Full | Full | Yes | Yes |
 | **Python** | tree-sitter | Full | Full | No | No |
 | **JavaScript/TypeScript** | tree-sitter | Full | Full | Yes (Jest/Vitest) | Yes |
-| **Kotlin** | tree-sitter | Full | Full | No | No |
+| **Kotlin** | tree-sitter | Full | Full | Yes (Kover/JaCoCo) | Yes |
 
 ## Features
 
@@ -247,6 +247,13 @@ Tree-sitter based parsing with:
 - Kotlin-specific detectors: `!!` non-null assertions and `runBlocking` usage
   outside a top-level `fun main` (configurable via `detect_non_null_assertions` /
   `detect_run_blocking`)
+- Test coverage via Gradle: runs `koverXmlReport` (Kover) or `test jacocoTestReport`
+  (JaCoCo), auto-detected from the build files (including `gradle/libs.versions.toml`
+  version catalogs); Kover wins when both are applied. Requires the Gradle wrapper or
+  a `gradle` binary, and one of the two plugins.
+- Dependency analysis grouped by declared Kotlin package, with circular
+  dependency detection. `kotlin.*`, `java.*`, and `javax.*` imports count as
+  stdlib; `kotlinx.*` counts as external (separate artifacts).
 
 Analysis covers `.kt` files only; `.kts` Gradle scripts are treated as build
 configuration and skipped.
@@ -289,7 +296,7 @@ analysis:
   detect_non_null_assertions: true # Detect !! usage (Kotlin)
   detect_run_blocking: true        # Detect runBlocking outside main (Kotlin)
 
-  # Coverage and dependency settings (Go and JavaScript/TypeScript)
+  # Coverage and dependency settings (Go, JavaScript/TypeScript, and Kotlin)
   enable_coverage: true          # Run test coverage analysis
   min_coverage_threshold: 50.0   # Minimum coverage percentage (0-100)
   coverage_timeout_seconds: 30   # Timeout for test execution per package
@@ -435,8 +442,8 @@ CLI (Cobra) → Orchestrator → Language Provider → Parser → Analyzer → R
 - **Parser**: Extracts metrics (LOC, functions, imports, complexity) per language
 - **Analyzer**: Aggregates metrics, applies thresholds, coordinates sub-analyzers
   - **Detector Runner**: Language-specific anti-pattern detection
-  - **Coverage Runner**: Language-specific test coverage (Go, JavaScript/TypeScript)
-  - **Dependency Analyzer**: Language-specific dependency analysis (Go, JavaScript/TypeScript)
+  - **Coverage Runner**: Language-specific test coverage (Go, JavaScript/TypeScript, Kotlin)
+  - **Dependency Analyzer**: Language-specific dependency analysis (Go, JavaScript/TypeScript, Kotlin)
 - **Reporter**: Formats and outputs results in console, Markdown, JSON, or HTML
 - **Storage**: Persists reports for historical tracking (file or SQLite backend)
 - **Comparator**: Compares current and previous reports, detects trends
