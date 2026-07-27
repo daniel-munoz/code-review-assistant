@@ -1,12 +1,17 @@
 package kotlin
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
+
+	"github.com/daniel-munoz/code-review-assistant/internal/coverage"
+	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
 
 // koverPluginID is the Gradle plugin id for Kover, JetBrains' Kotlin-first
@@ -92,4 +97,102 @@ func readGradleBuildFiles(projectPath string) string {
 		}
 	}
 	return sb.String()
+}
+
+// CoverageRunner executes Kotlin test coverage via Gradle (Kover or JaCoCo)
+// and parses the resulting JaCoCo-format XML reports.
+type CoverageRunner struct {
+	timeout time.Duration
+	status  status.Reporter
+}
+
+// NewCoverageRunner creates a new Kotlin coverage runner.
+func NewCoverageRunner(timeoutSeconds int, statusReporter status.Reporter) *CoverageRunner {
+	return &CoverageRunner{
+		timeout: time.Duration(timeoutSeconds) * time.Second,
+		status:  statusReporter,
+	}
+}
+
+// RunCoverage runs the Gradle coverage task and parses the reports.
+// excludePatterns is unused: exclusions are governed by the Gradle build
+// itself (mirroring the JS runner, which also ignores them).
+func (r *CoverageRunner) RunCoverage(projectPath string, excludePatterns []string) ([]*coverage.PackageCoverage, error) {
+	r.status.Update("[COVERAGE] Detecting Gradle build...")
+	gradleCmd, err := detectGradleCommand(projectPath)
+	if err != nil {
+		return nil, err
+	}
+	task, err := detectCoverageTask(projectPath)
+	if err != nil {
+		return nil, err
+	}
+
+	r.status.Update(fmt.Sprintf("[COVERAGE] Running Gradle task %s...", task.name))
+	if err := r.runGradle(projectPath, gradleCmd, task); err != nil {
+		return nil, err
+	}
+
+	r.status.Update("[COVERAGE] Parsing coverage reports...")
+	reports := findReports(projectPath)
+	if len(reports) == 0 {
+		return nil, fmt.Errorf("no coverage report found after Gradle run; check the %s report task configuration", task.name)
+	}
+	return parseReports(reports)
+}
+
+// runGradle executes the Gradle coverage task with a timeout. Failures embed
+// the task name and a bounded excerpt of Gradle's combined output, because
+// plugin detection is heuristic and the output is what makes its false
+// positives ("Task 'jacocoTestReport' not found") diagnosable.
+func (r *CoverageRunner) runGradle(projectPath, command string, task *gradleTask) error {
+	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, command, task.args...)
+	cmd.Dir = projectPath
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("gradle %s timed out after %s", task.name, r.timeout)
+		}
+		out := string(output)
+		if strings.Contains(out, "not found in root project") || strings.Contains(out, "not found in project") {
+			return fmt.Errorf("gradle has no task %q — the coverage plugin was detected from a mention in the Gradle build files but may not actually be applied (e.g. a comment or dependency coordinate): %w\n%s",
+				task.name, err, outputTail(out))
+		}
+		return fmt.Errorf("gradle %s failed: %w\n%s", task.name, err, outputTail(out))
+	}
+	return nil
+}
+
+// outputTail returns the last portion of Gradle output for error messages.
+func outputTail(s string) string {
+	const maxTail = 2000
+	if len(s) <= maxTail {
+		return s
+	}
+	return "..." + s[len(s)-maxTail:]
+}
+
+// findReports globs the standard Kover and JaCoCo XML report locations for
+// the root project and first-level subprojects (multi-module builds).
+func findReports(projectPath string) []string {
+	patterns := []string{
+		filepath.Join("build", "reports", "kover", "report.xml"),
+		filepath.Join("*", "build", "reports", "kover", "report.xml"),
+		filepath.Join("build", "reports", "jacoco", "test", "jacocoTestReport.xml"),
+		filepath.Join("*", "build", "reports", "jacoco", "test", "jacocoTestReport.xml"),
+	}
+
+	var reports []string
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(filepath.Join(projectPath, pattern))
+		if err != nil {
+			continue
+		}
+		reports = append(reports, matches...)
+	}
+	return reports
 }
