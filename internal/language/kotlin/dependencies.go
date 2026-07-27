@@ -1,7 +1,6 @@
 package kotlin
 
 import (
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -11,7 +10,7 @@ import (
 
 // rootPackage groups files that have no package declaration (valid but
 // unusual Kotlin, e.g. scratch files and simple mains).
-const rootPackage = "<root>"
+const rootPackage = "(root)"
 
 // stdlibPrefixes identify Kotlin/JVM standard library imports. kotlinx.* is
 // deliberately NOT here: kotlinx libraries (coroutines, serialization, ...)
@@ -24,13 +23,13 @@ var stdlibPrefixes = []string{"kotlin.", "java.", "javax."}
 // packages is derived from the `package` declarations of the analyzed files
 // themselves, and the unit of analysis is the declared Kotlin package (not
 // the directory).
-type DependencyAnalyzer struct {
-	projectPath string
-}
+type DependencyAnalyzer struct{}
 
-// NewDependencyAnalyzer creates a new Kotlin dependency analyzer.
+// NewDependencyAnalyzer creates a new Kotlin dependency analyzer. The
+// projectPath argument is required by the language.Language interface but
+// unused: internal packages come from the files' own package declarations.
 func NewDependencyAnalyzer(projectPath string) (*DependencyAnalyzer, error) {
-	return &DependencyAnalyzer{projectPath: filepath.Clean(projectPath)}, nil
+	return &DependencyAnalyzer{}, nil
 }
 
 // Analyze categorizes imports for every declared package.
@@ -100,17 +99,22 @@ func groupByPackage(files []*parser.FileMetrics) map[string][]*parser.FileMetric
 	return groups
 }
 
-// importQualifier returns the package part of an import: the trailing
-// class/member segment is stripped (`com.foo.bar.Baz` -> `com.foo.bar`),
-// and wildcard imports drop the `*` (`com.foo.bar.*` -> `com.foo.bar`).
-func importQualifier(imp string) string {
-	if strings.HasSuffix(imp, ".*") {
-		return strings.TrimSuffix(imp, ".*")
+// internalTarget returns the declared package an import resolves to, or ""
+// when the import is not internal to the project. It walks dot-segments from
+// the right so imports of nested classes, companion objects, and enum entries
+// (e.g. com.example.alpha.Alpha.Companion) resolve to their declared package.
+func internalTarget(imp string, declared map[string]bool) string {
+	for c := strings.TrimSuffix(imp, ".*"); c != ""; {
+		if declared[c] {
+			return c
+		}
+		i := strings.LastIndex(c, ".")
+		if i < 0 {
+			return ""
+		}
+		c = c[:i]
 	}
-	if i := strings.LastIndex(imp, "."); i >= 0 {
-		return imp[:i]
-	}
-	return imp
+	return ""
 }
 
 // categorizeImport classifies an import as internal, stdlib, or external.
@@ -118,7 +122,7 @@ func importQualifier(imp string) string {
 // principle declare a package under a stdlib-looking prefix, and the
 // project's own declaration wins.
 func categorizeImport(imp string, declared map[string]bool) string {
-	if declared[importQualifier(imp)] || declared[imp] {
+	if internalTarget(imp, declared) != "" {
 		return "internal"
 	}
 	for _, prefix := range stdlibPrefixes {
