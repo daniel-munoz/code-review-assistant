@@ -34,7 +34,7 @@ func detectGradleCommand(projectPath string) (string, error) {
 		return "", fmt.Errorf("cannot resolve project path %s: %w", projectPath, err)
 	}
 
-	wrappers := []string{"gradlew", "gradlew.bat"}
+	wrappers := []string{"gradlew"}
 	if runtime.GOOS == "windows" {
 		wrappers = []string{"gradlew.bat", "gradlew"}
 	}
@@ -151,6 +151,10 @@ func (r *CoverageRunner) runGradle(projectPath, command string, task *gradleTask
 
 	cmd := exec.CommandContext(ctx, command, task.args...)
 	cmd.Dir = projectPath
+	// A killed Gradle can leave children (the JVM/daemon) holding our stdout
+	// pipe; without a WaitDelay, CombinedOutput would block until they exit,
+	// making the timeout error arrive arbitrarily late.
+	cmd.WaitDelay = 2 * time.Second
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
