@@ -250,7 +250,9 @@ Tree-sitter based parsing with:
 - Test coverage via Gradle: runs `koverXmlReport` (Kover) or `test jacocoTestReport`
   (JaCoCo), auto-detected from the build files (including `gradle/libs.versions.toml`
   version catalogs); Kover wins when both are applied. Requires the Gradle wrapper or
-  a `gradle` binary, and one of the two plugins.
+  a `gradle` binary, and one of the two plugins. For real Gradle builds raise
+  `coverage_timeout_seconds` well above the 30s default (e.g. 300): the budget
+  covers the whole Gradle run including daemon startup and compilation.
 - Dependency analysis grouped by declared Kotlin package, with circular
   dependency detection. `kotlin.*`, `java.*`, and `javax.*` imports count as
   stdlib; `kotlinx.*` counts as external (separate artifacts).
@@ -299,7 +301,7 @@ analysis:
   # Coverage and dependency settings (Go, JavaScript/TypeScript, and Kotlin)
   enable_coverage: true          # Run test coverage analysis
   min_coverage_threshold: 50.0   # Minimum coverage percentage (0-100)
-  coverage_timeout_seconds: 30   # Timeout for test execution per package
+  coverage_timeout_seconds: 30   # Timeout: per package (Go); whole test run (JS, Kotlin/Gradle — use 300+ for cold Gradle builds)
   max_imports: 10                # Maximum imports per package
   max_external_dependencies: 10  # Maximum external dependencies per package
   detect_circular_deps: true     # Detect circular dependencies

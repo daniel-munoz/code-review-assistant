@@ -205,7 +205,7 @@ func main() {
 
 			// Create a new command instance
 			cmd := &cobra.Command{
-				Use:  "analyze [path]",
+				Use: "analyze [path]",
 				RunE: func(cmd *cobra.Command, args []string) error {
 					// Parse flags but don't actually run analysis
 					// Just validate that flags are parsed correctly

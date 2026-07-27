@@ -118,7 +118,7 @@ analysis:
   # Test coverage settings
   enable_coverage: true           # Run test coverage analysis
   min_coverage_threshold: 0       # Minimum required coverage percentage (0 = no minimum)
-  coverage_timeout_seconds: 60    # Timeout per package for running tests
+  coverage_timeout_seconds: 60    # coverage timeout in seconds (per package for Go; whole run for JS and Kotlin/Gradle)
 
   # Dependency analysis settings
   max_imports: 20                 # Max imports per file before warning
