@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
+	"github.com/daniel-munoz/code-review-assistant/internal/status"
 )
 
 func TestKotlinLanguage_Identity(t *testing.T) {
@@ -33,9 +34,9 @@ func TestKotlinLanguage_Components(t *testing.T) {
 	require.NotNil(t, lang.Parser(1))
 	require.NotNil(t, lang.DetectorRunner(cfg))
 
-	assert.Nil(t, lang.CoverageRunner(cfg, nil), "coverage not supported in first iteration")
+	assert.NotNil(t, lang.CoverageRunner(cfg, &status.SilentReporter{}), "Kotlin supports coverage via Gradle")
 
 	da, err := lang.DependencyAnalyzer(".")
 	assert.NoError(t, err)
-	assert.Nil(t, da, "dependency analysis not supported in first iteration")
+	assert.NotNil(t, da, "Kotlin supports dependency analysis")
 }

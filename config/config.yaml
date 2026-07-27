@@ -29,9 +29,9 @@ analysis:
   detect_run_blocking: true      # Detect runBlocking outside main (Kotlin)
 
   # Test coverage
-  enable_coverage: true          # Run go test -cover to analyze test coverage
+  enable_coverage: true          # Run test coverage (go test -cover, Jest/Vitest, Gradle Kover/JaCoCo)
   min_coverage_threshold: 50.0   # Minimum coverage percentage (0-100)
-  coverage_timeout_seconds: 30   # Timeout for test execution per package
+  coverage_timeout_seconds: 30   # Timeout: per package (Go); whole test run (JS, Kotlin/Gradle — use 300+ for cold Gradle builds)
 
   # Dependency analysis
   max_imports: 10                # Maximum imports per package before flagging

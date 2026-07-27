@@ -53,7 +53,7 @@ func TestBuildCoverageBreakdown(t *testing.T) {
 			{PackagePath: "pkg/a", Coverage: 85.0},
 			{PackagePath: "pkg/b", Coverage: 55.0},
 			{PackagePath: "pkg/c", Coverage: 30.0},
-			{PackagePath: "pkg/d", Skipped: true},       // Should be excluded
+			{PackagePath: "pkg/d", Skipped: true},        // Should be excluded
 			{PackagePath: "pkg/e", Error: "test failed"}, // Should be excluded
 		},
 	}
@@ -499,7 +499,7 @@ func TestBuildChartData_MinimalResult(t *testing.T) {
 
 	require.NotNil(t, data)
 	assert.NotNil(t, data.ComplexityDist)
-	assert.Nil(t, data.IssueCounts)     // No issues
+	assert.Nil(t, data.IssueCounts) // No issues
 	assert.NotNil(t, data.Heatmap)
 	assert.Nil(t, data.CoverageBreakdown) // No coverage
 	assert.Nil(t, data.DependencyGraph)   // No dependencies

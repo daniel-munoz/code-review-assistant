@@ -117,5 +117,5 @@ func TestParseDirectory_Kotlin(t *testing.T) {
 
 	metrics, errs := p.ParseDirectory(dir, nil, []string{".kt"}, status.NewSilentReporter())
 	assert.Empty(t, errs)
-	assert.Len(t, metrics, 3, "sample.kt, complex.kt, antipatterns.kt")
+	assert.Len(t, metrics, 7, "sample.kt, complex.kt, antipatterns.kt, plus 4 dependency fixtures under deps/")
 }

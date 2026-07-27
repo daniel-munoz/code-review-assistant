@@ -122,8 +122,8 @@ func TestDetectCircularDependencies(t *testing.T) {
 				FilePath:    "../../internal/pkg1/file.go",
 				PackageName: "pkg1",
 				Imports: []string{
-					"fmt",                       // stdlib - ignored
-					"github.com/spf13/cobra",    // external - ignored
+					"fmt",                    // stdlib - ignored
+					"github.com/spf13/cobra", // external - ignored
 					"github.com/daniel-munoz/code-review-assistant/internal/pkg2", // internal
 				},
 			},
@@ -131,8 +131,8 @@ func TestDetectCircularDependencies(t *testing.T) {
 				FilePath:    "../../internal/pkg2/file.go",
 				PackageName: "pkg2",
 				Imports: []string{
-					"os",                        // stdlib - ignored
-					"github.com/spf13/viper",    // external - ignored
+					"os",                     // stdlib - ignored
+					"github.com/spf13/viper", // external - ignored
 				},
 			},
 		}
@@ -353,4 +353,44 @@ func TestCircularDependency_FormatCycle(t *testing.T) {
 		formatted := cd.FormatCycle()
 		assert.Equal(t, "pkg1", formatted)
 	})
+}
+
+func TestFindCycles_NoCycle(t *testing.T) {
+	graph := map[string][]string{
+		"a": {"b"},
+		"b": {"c"},
+		"c": {},
+	}
+
+	cycles := FindCycles(graph)
+
+	assert.Empty(t, cycles)
+}
+
+func TestFindCycles_SingleCycle(t *testing.T) {
+	graph := map[string][]string{
+		"a": {"b"},
+		"b": {"a"},
+	}
+
+	cycles := FindCycles(graph)
+
+	require.Len(t, cycles, 1)
+	// Cycle is closed: first element repeated at the end.
+	assert.Len(t, cycles[0].Cycle, 3)
+	assert.Equal(t, cycles[0].Cycle[0], cycles[0].Cycle[len(cycles[0].Cycle)-1])
+	assert.ElementsMatch(t, []string{"a", "b"}, cycles[0].Cycle[:2])
+}
+
+func TestFindCycles_TwoDisjointCycles(t *testing.T) {
+	graph := map[string][]string{
+		"a": {"b"},
+		"b": {"a"},
+		"x": {"y"},
+		"y": {"x"},
+	}
+
+	cycles := FindCycles(graph)
+
+	assert.Len(t, cycles, 2)
 }

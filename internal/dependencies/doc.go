@@ -1,12 +1,12 @@
-// Package dependencies analyzes import dependencies in Go projects.
+// Package dependencies analyzes import dependencies and provides language-agnostic
+// cycle detection infrastructure. Language-specific analyzers (e.g., Go, Kotlin)
+// build their own dependency graphs and delegate circular dependency detection
+// to the shared algorithms here.
 //
-// The dependency analyzer categorizes imports into three types:
+// For Go projects, the dependency analyzer also categorizes imports into three types:
 // - Standard library (e.g., fmt, os, strings)
 // - Internal packages (within the same module)
 // - External packages (third-party dependencies)
-//
-// It also detects circular dependencies between internal packages using
-// depth-first search (DFS) with cycle detection.
 //
 // # Import Categorization
 //
@@ -27,6 +27,8 @@
 //
 // # Usage
 //
+// For Go analysis:
+//
 //	analyzer, err := dependencies.NewAnalyzer("/path/to/project")
 //	if err != nil {
 //	    log.Fatal(err)
@@ -37,4 +39,9 @@
 //
 //	// Detect circular dependencies
 //	cycles, err := analyzer.DetectCircularDependencies(fileMetrics)
+//
+// For other languages, build a dependency graph and use the shared cycle detector:
+//
+//	// Language providers with their own graph can reuse cycle detection:
+//	cycles := dependencies.FindCycles(graph)
 package dependencies

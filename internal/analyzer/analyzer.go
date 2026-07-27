@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -91,27 +92,27 @@ func NewAnalyzer(
 // This is the main analysis pipeline that orchestrates all analysis phases:
 //
 // 1. Metrics Aggregation:
-//    - Accumulates file and function counts
-//    - Detects large files and long functions
-//    - Identifies high-complexity functions
+//   - Accumulates file and function counts
+//   - Detects large files and long functions
+//   - Identifies high-complexity functions
 //
 // 2. Anti-Pattern Detection:
-//    - Runs all enabled detectors (parameters, nesting, returns, magic numbers, etc.)
-//    - Requires re-parsing to obtain AST for pattern matching
+//   - Runs all enabled detectors (parameters, nesting, returns, magic numbers, etc.)
+//   - Requires re-parsing to obtain AST for pattern matching
 //
 // 3. Statistical Analysis:
-//    - Calculates aggregate metrics (averages, percentiles)
-//    - Identifies outliers (largest files, most complex functions)
-//    - Computes overall comment ratio
+//   - Calculates aggregate metrics (averages, percentiles)
+//   - Identifies outliers (largest files, most complex functions)
+//   - Computes overall comment ratio
 //
 // 4. Coverage Analysis (optional):
-//    - Runs go test -cover if enabled
-//    - Detects packages below coverage threshold
+//   - Runs go test -cover if enabled
+//   - Detects packages below coverage threshold
 //
 // 5. Dependency Analysis:
-//    - Categorizes imports (stdlib, internal, external)
-//    - Detects circular dependencies
-//    - Identifies packages with too many dependencies
+//   - Categorizes imports (stdlib, internal, external)
+//   - Detects circular dependencies
+//   - Identifies packages with too many dependencies
 //
 // The function is fault-tolerant: coverage and dependency failures produce
 // warnings but don't fail the entire analysis.
@@ -369,7 +370,7 @@ func (ma *MetricsAnalyzer) runCoverageIfEnabled(projectPath string, result *Anal
 
 	coverageResults, err := ma.coverageRunner.RunCoverage(projectPath, ma.config.ExcludePatterns)
 	if err != nil {
-		fmt.Printf("Warning: Coverage analysis failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: Coverage analysis failed: %v\n", err)
 		return
 	}
 
@@ -385,7 +386,7 @@ func (ma *MetricsAnalyzer) runDependencyAnalysis(projectPath string, metrics []*
 	ma.status.Update("[ANALYZE] Analyzing dependencies...")
 	depAnalyzer, err := ma.depAnalyzerFactory(projectPath)
 	if err != nil {
-		fmt.Printf("Warning: Dependency analysis failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: Dependency analysis failed: %v\n", err)
 		return
 	}
 	if depAnalyzer == nil {
@@ -470,7 +471,7 @@ func (ma *MetricsAnalyzer) analyzeDependenciesWithRunner(depAnalyzer DependencyA
 	// Analyze dependencies
 	packageDeps, err := depAnalyzer.Analyze(metrics)
 	if err != nil {
-		fmt.Printf("Warning: Failed to analyze dependencies: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: Failed to analyze dependencies: %v\n", err)
 		return nil
 	}
 
@@ -479,7 +480,7 @@ func (ma *MetricsAnalyzer) analyzeDependenciesWithRunner(depAnalyzer DependencyA
 	if ma.config.DetectCircularDeps {
 		depCircular, err := depAnalyzer.DetectCircularDependencies(metrics)
 		if err != nil {
-			fmt.Printf("Warning: Failed to detect circular dependencies: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Warning: Failed to detect circular dependencies: %v\n", err)
 		} else {
 			// Convert from dependencies.CircularDependency to analyzer.CircularDependency
 			for _, cd := range depCircular {

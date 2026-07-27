@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" "report.dtd">
+<report name="sample">
+  <package name="com/example/alpha">
+    <class name="com/example/alpha/Alpha" sourcefilename="Alpha.kt">
+      <counter type="LINE" missed="1" covered="1"/>
+    </class>
+    <counter type="INSTRUCTION" missed="10" covered="90"/>
+    <counter type="LINE" missed="5" covered="15"/>
+  </package>
+  <package name="com/example/beta">
+    <counter type="LINE" missed="0" covered="10"/>
+  </package>
+  <package name="com/example/empty">
+    <counter type="INSTRUCTION" missed="0" covered="0"/>
+  </package>
+</report>

@@ -11,12 +11,12 @@ import (
 
 // ChartData contains all pre-processed data for JavaScript charts
 type ChartData struct {
-	ComplexityDist    *ComplexityDistribution  `json:"complexityDist"`
-	CoverageBreakdown *CoverageBreakdownData   `json:"coverageBreakdown"`
-	IssueCounts       *IssueCountData          `json:"issueCounts"`
-	Heatmap           []*HeatmapCell           `json:"heatmap"`
-	DependencyGraph   *DependencyGraphData     `json:"dependencyGraph"`
-	MetricsTimeSeries *MetricsTimeSeriesData   `json:"metricsTimeSeries,omitempty"`
+	ComplexityDist    *ComplexityDistribution `json:"complexityDist"`
+	CoverageBreakdown *CoverageBreakdownData  `json:"coverageBreakdown"`
+	IssueCounts       *IssueCountData         `json:"issueCounts"`
+	Heatmap           []*HeatmapCell          `json:"heatmap"`
+	DependencyGraph   *DependencyGraphData    `json:"dependencyGraph"`
+	MetricsTimeSeries *MetricsTimeSeriesData  `json:"metricsTimeSeries,omitempty"`
 }
 
 // ComplexityDistribution for histogram showing function complexity distribution
@@ -81,9 +81,9 @@ func buildChartData(result *analyzer.AnalysisResult, store storage.Storage) *Cha
 	}
 
 	data := &ChartData{
-		ComplexityDist:    buildComplexityDistribution(result),
-		IssueCounts:       buildIssueCountData(result.Issues),
-		Heatmap:           buildHeatmapData(result),
+		ComplexityDist: buildComplexityDistribution(result),
+		IssueCounts:    buildIssueCountData(result.Issues),
+		Heatmap:        buildHeatmapData(result),
 	}
 
 	// Only build coverage breakdown if coverage data exists
@@ -471,12 +471,12 @@ func (cd *ChartData) toJSON() string {
 
 // MetricsTimeSeriesData for line chart showing metrics over time
 type MetricsTimeSeriesData struct {
-	Labels       []string  `json:"labels"`       // Timestamps (formatted)
-	Complexity   []float64 `json:"complexity"`   // Average complexity over time
-	Coverage     []float64 `json:"coverage"`     // Coverage percentage over time
-	IssueCount   []int     `json:"issueCount"`   // Total issues over time
-	TotalLines   []int     `json:"totalLines"`   // Total lines of code over time
-	RawTimestamps []string `json:"timestamps"`   // ISO timestamps for tooltips
+	Labels        []string  `json:"labels"`     // Timestamps (formatted)
+	Complexity    []float64 `json:"complexity"` // Average complexity over time
+	Coverage      []float64 `json:"coverage"`   // Coverage percentage over time
+	IssueCount    []int     `json:"issueCount"` // Total issues over time
+	TotalLines    []int     `json:"totalLines"` // Total lines of code over time
+	RawTimestamps []string  `json:"timestamps"` // ISO timestamps for tooltips
 }
 
 // buildTimeSeriesData creates time series data from historical reports
