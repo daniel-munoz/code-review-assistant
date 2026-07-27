@@ -81,7 +81,7 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&jsonPretty, "json-pretty", true, "pretty-print JSON output")
 	analyzeCmd.Flags().BoolVar(&enableCoverage, "enable-coverage", true, "enable test coverage analysis")
 	analyzeCmd.Flags().Float64Var(&minCoverageThreshold, "min-coverage-threshold", 0, "minimum coverage threshold percentage (0-100)")
-	analyzeCmd.Flags().IntVar(&coverageTimeout, "coverage-timeout", 0, "timeout for test execution per package (seconds)")
+	analyzeCmd.Flags().IntVar(&coverageTimeout, "coverage-timeout", 0, "coverage timeout in seconds (per package for Go; whole run for JS and Kotlin/Gradle)")
 	analyzeCmd.Flags().IntVar(&maxImports, "max-imports", 0, "maximum imports per package before flagging")
 	analyzeCmd.Flags().IntVar(&maxExternalDependencies, "max-external-dependencies", 0, "maximum external dependencies per package")
 	analyzeCmd.Flags().BoolVar(&detectCircularDeps, "detect-circular-deps", true, "detect circular dependencies between packages")
