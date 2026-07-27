@@ -11,8 +11,9 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 )
 
-// parseDepsFixtures parses every fixture in testdata/kotlin/deps with the real
-// Kotlin parser, so these tests also cover package/import extraction end to end.
+// parseDepsFixtures parses the dependency fixtures in testdata/kotlin/deps with
+// the real Kotlin parser, so these tests also cover package/import extraction
+// end to end.
 func parseDepsFixtures(t *testing.T) []*parser.FileMetrics {
 	t.Helper()
 
@@ -81,8 +82,61 @@ func TestDependencyAnalyzer_Analyze_FileWithoutPackageGroupsUnderRoot(t *testing
 	results, err := analyzer.Analyze(parseDepsFixtures(t))
 	require.NoError(t, err)
 
-	root := findPackage(t, results, "<root>")
+	root := findPackage(t, results, "(root)")
 	assert.Equal(t, []string{"com.example.gamma.Gamma"}, root.InternalImports)
+}
+
+func TestDependencyAnalyzer_Analyze_EdgeCases(t *testing.T) {
+	analyzer, err := NewDependencyAnalyzer(".")
+	require.NoError(t, err)
+
+	t.Run("nil input", func(t *testing.T) {
+		results, err := analyzer.Analyze(nil)
+		require.NoError(t, err)
+		assert.Empty(t, results)
+	})
+
+	t.Run("multiple files in one package dedupe imports", func(t *testing.T) {
+		files := []*parser.FileMetrics{
+			{FilePath: "a.kt", PackageName: "com.example.p", Imports: []string{"java.util.UUID", "com.other.Thing"}},
+			{FilePath: "b.kt", PackageName: "com.example.p", Imports: []string{"java.util.UUID"}},
+		}
+
+		results, err := analyzer.Analyze(files)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Equal(t, 2, results[0].TotalImports, "duplicate import counted once")
+		assert.Equal(t, []string{"java.util.UUID"}, results[0].StdlibImports)
+		assert.Equal(t, []string{"com.other.Thing"}, results[0].ExternalImports)
+	})
+
+	t.Run("package with no imports", func(t *testing.T) {
+		files := []*parser.FileMetrics{
+			{FilePath: "c.kt", PackageName: "com.example.empty"},
+		}
+
+		results, err := analyzer.Analyze(files)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Equal(t, 0, results[0].TotalImports)
+		assert.Equal(t, 0, results[0].ExternalImportCount)
+	})
+
+	t.Run("nested class and enum entry imports resolve to declared package", func(t *testing.T) {
+		files := []*parser.FileMetrics{
+			{FilePath: "d.kt", PackageName: "com.example.alpha"},
+			{FilePath: "e.kt", PackageName: "com.example.beta", Imports: []string{
+				"com.example.alpha.Alpha.Companion",
+				"com.example.alpha.Color.RED",
+			}},
+		}
+
+		results, err := analyzer.Analyze(files)
+		require.NoError(t, err)
+		beta := findPackage(t, results, "com.example.beta")
+		assert.Len(t, beta.InternalImports, 2)
+		assert.Empty(t, beta.ExternalImports)
+	})
 }
 
 func TestCategorizeImport(t *testing.T) {
@@ -103,6 +157,8 @@ func TestCategorizeImport(t *testing.T) {
 		{"javax.inject.Inject", "stdlib"},
 		{"kotlinx.coroutines.flow.Flow", "external"},
 		{"com.thirdparty.http.Client", "external"},
+		{"com.example.alpha.Alpha.Companion", "internal"}, // nested member resolves via longest declared prefix
+		{"com.example.alphax.Thing", "external"},          // prefix similarity is not a match
 	}
 
 	for _, tc := range cases {
