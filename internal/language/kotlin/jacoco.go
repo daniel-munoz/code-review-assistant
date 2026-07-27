@@ -14,7 +14,20 @@ import (
 // XML report uses the same format, so one parser serves both tools.
 // Only counters that are DIRECT children of <package> are package totals;
 // <class>/<sourcefile> children carry their own counters and are ignored.
+//
+// The XMLName tag pins the expected root element so that non-JaCoCo XML
+// (e.g. accidentally swept up by a future glob) fails loudly instead of
+// silently parsing to zero packages.
 type jacocoReport struct {
+	XMLName  xml.Name        `xml:"report"`
+	Groups   []jacocoGroup   `xml:"group"`
+	Packages []jacocoPackage `xml:"package"`
+}
+
+// jacocoGroup nests arbitrarily in aggregate reports
+// (jacoco-report-aggregation, multi-project Kover builds).
+type jacocoGroup struct {
+	Groups   []jacocoGroup   `xml:"group"`
 	Packages []jacocoPackage `xml:"package"`
 }
 
@@ -37,6 +50,16 @@ type lineTally struct {
 	hasLine bool
 }
 
+// collectPackages flattens a report's package list, descending into
+// arbitrarily nested <group> elements.
+func collectPackages(groups []jacocoGroup, packages []jacocoPackage) []jacocoPackage {
+	all := append([]jacocoPackage{}, packages...)
+	for _, g := range groups {
+		all = append(all, collectPackages(g.Groups, g.Packages)...)
+	}
+	return all
+}
+
 // parseReports reads JaCoCo/Kover XML reports and produces per-package
 // coverage. Duplicate packages across reports are merged by summing their
 // LINE counters before computing the percentage.
@@ -54,9 +77,12 @@ func parseReports(paths []string) ([]*coverage.PackageCoverage, error) {
 			return nil, fmt.Errorf("failed to parse coverage report %s: %w", path, err)
 		}
 
-		for _, pkg := range report.Packages {
+		for _, pkg := range collectPackages(report.Groups, report.Packages) {
 			// JaCoCo names packages with slashes: com/example/alpha
 			name := strings.ReplaceAll(pkg.Name, "/", ".")
+			if name == "" {
+				name = rootPackage
+			}
 			tally, ok := tallies[name]
 			if !ok {
 				tally = &lineTally{}
@@ -72,10 +98,14 @@ func parseReports(paths []string) ([]*coverage.PackageCoverage, error) {
 		}
 	}
 
+	if len(tallies) == 0 {
+		return nil, fmt.Errorf("no coverage packages found in reports: %s", strings.Join(paths, ", "))
+	}
+
 	var results []*coverage.PackageCoverage
 	for name, tally := range tallies {
 		total := tally.covered + tally.missed
-		if !tally.hasLine || total == 0 {
+		if !tally.hasLine || total <= 0 {
 			results = append(results, &coverage.PackageCoverage{
 				PackagePath: name,
 				Skipped:     true,
