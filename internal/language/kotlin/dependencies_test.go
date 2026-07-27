@@ -176,7 +176,7 @@ func TestDependencyAnalyzer_DetectCircularDependencies(t *testing.T) {
 	// alpha -> beta -> alpha is the only cycle; gamma and (root) only
 	// point INTO the cycle and must not appear in it.
 	require.Len(t, cycles, 1)
-	assert.Len(t, cycles[0].Cycle, 3)
+	require.Len(t, cycles[0].Cycle, 3)
 	assert.ElementsMatch(t, []string{"com.example.alpha", "com.example.beta"}, cycles[0].Cycle[:2])
 }
 
