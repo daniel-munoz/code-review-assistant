@@ -15,8 +15,14 @@ type CircularDependency struct {
 // DetectCircularDependencies finds circular dependencies using DFS
 func (a *Analyzer) DetectCircularDependencies(files []*parser.FileMetrics) ([]*CircularDependency, error) {
 	graph := a.buildDependencyGraph(files)
-	detector := newCycleDetector(graph)
-	return detector.findCycles(), nil
+	return FindCycles(graph), nil
+}
+
+// FindCycles detects circular dependencies in a package graph using DFS.
+// The graph maps each package to the packages it imports. Language providers
+// build their own graph and delegate cycle detection here.
+func FindCycles(graph map[string][]string) []*CircularDependency {
+	return newCycleDetector(graph).findCycles()
 }
 
 // buildDependencyGraph creates a graph of internal package dependencies
