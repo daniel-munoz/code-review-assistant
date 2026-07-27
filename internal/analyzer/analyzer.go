@@ -32,7 +32,8 @@ type DetectorRunner interface {
 
 // CoverageRunner runs test coverage analysis for a specific language.
 type CoverageRunner interface {
-	// RunCoverage runs test coverage analysis for the project.
+	// RunCoverage runs test coverage analysis for the project. May return
+	// partial results alongside a non-nil error (see language.CoverageRunner).
 	RunCoverage(projectPath string, excludePatterns []string) ([]*coverage.PackageCoverage, error)
 }
 
@@ -370,8 +371,13 @@ func (ma *MetricsAnalyzer) runCoverageIfEnabled(projectPath string, result *Anal
 
 	coverageResults, err := ma.coverageRunner.RunCoverage(projectPath, ma.config.ExcludePatterns)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Coverage analysis failed: %v\n", err)
-		return
+		if len(coverageResults) == 0 {
+			fmt.Fprintf(os.Stderr, "Warning: Coverage analysis failed: %v\n", err)
+			return
+		}
+		// Partial results (e.g. reports salvaged from a Gradle run where some
+		// tests failed): use them, but keep the failure visible.
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
 	result.Coverage = ma.analyzeCoverage(coverageResults, result)

@@ -623,6 +623,40 @@ func (m *erroringCoverageRunner) RunCoverage(projectPath string, excludePatterns
 	return nil, errors.New("coverage tool not found")
 }
 
+// partialCoverageRunner returns results alongside an error, like the Kotlin
+// runner salvaging reports from a Gradle run where some tests failed.
+type partialCoverageRunner struct{}
+
+func (m *partialCoverageRunner) RunCoverage(projectPath string, excludePatterns []string) ([]*coverage.PackageCoverage, error) {
+	return []*coverage.PackageCoverage{
+		{PackagePath: "com.example.alpha", Coverage: 75.0},
+	}, errors.New("coverage may be incomplete — 1 report(s) parsed from a failed Gradle run")
+}
+
+// TestAnalyze_PartialCoverageResultsAreUsed: when a runner salvages coverage
+// from a partially failed run, the results must land in the analysis instead
+// of being discarded with the error.
+func TestAnalyze_PartialCoverageResultsAreUsed(t *testing.T) {
+	cfg := config.Default()
+	cfg.Analysis.EnableCoverage = true
+
+	analyzer := NewAnalyzer(
+		&cfg.Analysis,
+		status.NewSilentReporter(),
+		&mockDetectorRunner{},
+		&partialCoverageRunner{},
+		nil,
+	)
+
+	metrics := []*parser.FileMetrics{
+		{FilePath: "test.go", PackageName: "test"},
+	}
+
+	result, err := analyzer.Analyze("/test/project", metrics)
+	require.NoError(t, err)
+	require.NotNil(t, result.Coverage, "salvaged partial coverage must be analyzed, not discarded")
+}
+
 // erroringDependencyAnalyzerFactory always fails to build a DependencyAnalyzer.
 func erroringDependencyAnalyzerFactory(projectPath string) (DependencyAnalyzer, error) {
 	return nil, errors.New("dependency analyzer unavailable")
