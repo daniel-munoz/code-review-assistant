@@ -76,6 +76,125 @@ plugins {
 	assert.Equal(t, "koverXmlReport", task.name)
 }
 
+func TestDetectCoverageTask_ApplyPluginJacocoGroovy(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle"), `
+apply plugin: 'kotlin'
+apply plugin: 'jacoco'
+`)
+
+	task, err := detectCoverageTask(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "jacocoTestReport", task.name)
+}
+
+func TestDetectCoverageTask_ApplyPluginJacocoKts(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `
+apply(plugin = "jacoco")
+`)
+
+	task, err := detectCoverageTask(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "jacocoTestReport", task.name)
+}
+
+func TestDetectCoverageTask_BareJacocoAccessorKts(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `
+plugins {
+    kotlin("jvm") version "2.0.0"
+    jacoco
+}
+`)
+
+	task, err := detectCoverageTask(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "jacocoTestReport", task.name)
+}
+
+func TestDetectCoverageTask_JacocoInLineCommentNotDetected(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle"), `
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '2.0.0'
+}
+// dependency locking and the jacoco plugin don't play together nicely
+`)
+
+	_, err := detectCoverageTask(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no coverage plugin detected")
+}
+
+func TestDetectCoverageTask_JacocoInStringLiteralNotDetected(t *testing.T) {
+	dir := t.TempDir()
+	// Real-world shape: a configuration-name check that mentions jacoco
+	// without the plugin ever being applied.
+	writeGradleFile(t, filepath.Join(dir, "build.gradle"), `
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '2.0.0'
+}
+configurations.all {
+    if (!it.name.startsWith("jacoco")) {
+        resolutionStrategy.activateDependencyLocking()
+    }
+}
+`)
+
+	_, err := detectCoverageTask(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no coverage plugin detected")
+}
+
+func TestDetectCoverageTask_JacocoInBlockCommentNotDetected(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `
+/*
+To enable coverage, add:
+    apply(plugin = "jacoco")
+*/
+plugins {
+    kotlin("jvm")
+}
+`)
+
+	_, err := detectCoverageTask(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no coverage plugin detected")
+}
+
+func TestDetectCoverageTask_CommentedOutKoverNotDetected(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `
+plugins {
+    kotlin("jvm")
+    // id("org.jetbrains.kotlinx.kover") version "0.9.1"
+}
+`)
+
+	_, err := detectCoverageTask(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no coverage plugin detected")
+}
+
+func TestDetectCoverageTask_CommentedOutCatalogKoverNotDetected(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `
+plugins {
+    kotlin("jvm")
+}
+`)
+	writeGradleFile(t, filepath.Join(dir, "gradle", "libs.versions.toml"), `
+[plugins]
+# kover = { id = "org.jetbrains.kotlinx.kover", version = "0.9.1" }
+`)
+
+	_, err := detectCoverageTask(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no coverage plugin detected")
+}
+
 func TestDetectCoverageTask_NoPluginErrors(t *testing.T) {
 	dir := t.TempDir()
 	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `
@@ -319,16 +438,21 @@ func TestRunCoverage_GradleFailureSurfacesOutput(t *testing.T) {
 
 func TestRunCoverage_TaskNotFoundGetsFriendlyHint(t *testing.T) {
 	dir := t.TempDir()
-	// "jacoco" mentioned but plugin not applied -> detection picks jacocoTestReport,
-	// Gradle then fails at configuration time with "task not found".
-	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `// jacoco agent only, plugin not applied`)
+	// The plugin is genuinely applied in the build file, but Gradle still has
+	// no such task (e.g. the application is conditional, or lives in a
+	// subproject this Gradle invocation doesn't configure).
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `
+plugins {
+    jacoco
+}
+`)
 	writeGradleFile(t, filepath.Join(dir, "gradlew"), "#!/bin/sh\necho \"Task 'jacocoTestReport' not found in root project 'demo'.\" >&2\nexit 1\n")
 	require.NoError(t, os.Chmod(filepath.Join(dir, "gradlew"), 0o755))
 
 	runner := NewCoverageRunner(60, &status.SilentReporter{})
 	_, err := runner.RunCoverage(dir, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "may not actually be applied", "task-not-found should hint that detection can false-positive on comments/coordinates")
+	assert.Contains(t, err.Error(), "applied conditionally", "task-not-found should hint why an applied plugin may still lack the task")
 }
 
 func TestRunCoverage_TimeoutSurfaced(t *testing.T) {
