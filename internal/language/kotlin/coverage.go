@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -75,17 +76,48 @@ func detectGradleCommand(projectPath string) (string, error) {
 	return "", fmt.Errorf("no Gradle wrapper (gradlew) in %s and no gradle binary on PATH; add the wrapper or install Gradle", projectPath)
 }
 
+// Comment syntax across the scanned file types: /* */ and // in Gradle
+// scripts, # in the version catalog (TOML). Stripping is lexical and does not
+// track string literals, which is fine for a detection heuristic: it can only
+// drop mentions, never invent an application.
+var (
+	blockCommentRe = regexp.MustCompile(`(?s)/\*.*?\*/`)
+	lineCommentRe  = regexp.MustCompile(`(?m)(//|#).*$`)
+)
+
+// jacocoApplyRes match the ways a build actually applies the JaCoCo plugin:
+// plugins-block entries (id 'jacoco', id("jacoco")), the legacy apply syntax
+// (apply plugin: 'jacoco', apply(plugin = "jacoco")), and the Kotlin DSL
+// type-safe accessor (a bare `jacoco` line inside plugins {}). Matching
+// application forms instead of the substring "jacoco" keeps mentions in
+// strings — e.g. it.name.startsWith("jacoco") — from triggering a doomed
+// jacocoTestReport run.
+var jacocoApplyRes = []*regexp.Regexp{
+	regexp.MustCompile(`\bid\s*\(?\s*['"]jacoco['"]`),
+	regexp.MustCompile(`\bapply\s*\(?\s*plugin\s*[:=]\s*['"]jacoco['"]`),
+	regexp.MustCompile(`(?m)^\s*jacoco\s*$`),
+}
+
+func stripComments(s string) string {
+	s = blockCommentRe.ReplaceAllString(s, " ")
+	return lineCommentRe.ReplaceAllString(s, "")
+}
+
 // detectCoverageTask determines which coverage plugin the build applies.
 // Kover wins when both are present (it is Kotlin-aware). The scan covers the
 // root and one level of subprojects, matching common multi-module layouts.
+// Comments are stripped first so a commented-out plugin or a passing mention
+// never selects a task the build doesn't have.
 func detectCoverageTask(projectPath string) (*gradleTask, error) {
-	content := readGradleBuildFiles(projectPath)
+	content := stripComments(readGradleBuildFiles(projectPath))
 
 	if strings.Contains(content, koverPluginID) {
 		return &gradleTask{name: "koverXmlReport", args: []string{"koverXmlReport"}, reportGlobs: koverReportGlobs}, nil
 	}
-	if strings.Contains(content, "jacoco") {
-		return &gradleTask{name: "jacocoTestReport", args: []string{"test", "jacocoTestReport"}, reportGlobs: jacocoReportGlobs}, nil
+	for _, re := range jacocoApplyRes {
+		if re.MatchString(content) {
+			return &gradleTask{name: "jacocoTestReport", args: []string{"test", "jacocoTestReport"}, reportGlobs: jacocoReportGlobs}, nil
+		}
 	}
 	return nil, fmt.Errorf("no coverage plugin detected in Gradle build files; apply Kover (%s) or JaCoCo to enable coverage", koverPluginID)
 }
@@ -163,8 +195,8 @@ func (r *CoverageRunner) RunCoverage(projectPath string, excludePatterns []strin
 
 // runGradle executes the Gradle coverage task with a timeout. Failures embed
 // the task name and a bounded excerpt of Gradle's combined output, because
-// plugin detection is heuristic and the output is what makes its false
-// positives ("Task 'jacocoTestReport' not found") diagnosable. A run that
+// plugin detection is heuristic and the output is what makes a surprising
+// failure ("Task 'jacocoTestReport' not found") diagnosable. A run that
 // hits the timeout surfaces its error only after timeout + gradlePipeDrainDelay,
 // since CombinedOutput waits up to gradlePipeDrainDelay for orphaned children
 // to release the output pipe before giving up.
@@ -192,7 +224,7 @@ func (r *CoverageRunner) runGradle(projectPath, command string, task *gradleTask
 		}
 		out := string(output)
 		if strings.Contains(out, "not found in root project") || strings.Contains(out, "not found in project") {
-			return fmt.Errorf("gradle has no task %q — the coverage plugin was detected from a mention in the Gradle build files but may not actually be applied (e.g. a comment or dependency coordinate): %w\n%s",
+			return fmt.Errorf("gradle has no task %q — the coverage plugin is applied in the Gradle build files but the task is missing (e.g. the plugin is applied conditionally, or only in subprojects this invocation doesn't configure): %w\n%s",
 				task.name, err, outputTail(out))
 		}
 		if tail := outputTail(out); tail != "" {
