@@ -29,7 +29,7 @@ analysis:
   detect_run_blocking: true      # Detect runBlocking outside main (Kotlin)
 
   # Test coverage
-  enable_coverage: true          # Run go test -cover to analyze test coverage
+  enable_coverage: true          # Run test coverage (go test -cover, Jest/Vitest, Gradle Kover/JaCoCo)
   min_coverage_threshold: 50.0   # Minimum coverage percentage (0-100)
   coverage_timeout_seconds: 30   # Timeout for test execution per package
 
