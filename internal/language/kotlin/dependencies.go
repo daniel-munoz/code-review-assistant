@@ -8,8 +8,9 @@ import (
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 )
 
-// rootPackage groups files that have no package declaration (valid but
-// unusual Kotlin, e.g. scratch files and simple mains).
+// rootPackage is the shared label for the default/unnamed package: files
+// with no package declaration in dependency analysis, and JaCoCo's empty
+// package name in coverage reports.
 const rootPackage = "(root)"
 
 // stdlibPrefixes identify Kotlin/JVM standard library imports. kotlinx.* is

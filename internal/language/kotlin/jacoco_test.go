@@ -91,3 +91,15 @@ func TestParseReports_NoPackagesAnywhereErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no coverage packages")
 }
+
+func TestParseReports_EmptyReportMergedWithRealOneSucceeds(t *testing.T) {
+	empty := filepath.Join(t.TempDir(), "empty.xml")
+	require.NoError(t, os.WriteFile(empty, []byte(`<?xml version="1.0"?><report name="empty"></report>`), 0o644))
+
+	results, err := parseReports([]string{
+		"../../../testdata/kotlin/coverage/jacoco-module-a.xml",
+		empty,
+	})
+	require.NoError(t, err, "an empty module report alongside a real one is fine")
+	require.Len(t, results, 1)
+}
