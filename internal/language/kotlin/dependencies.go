@@ -74,6 +74,33 @@ func (a *DependencyAnalyzer) Analyze(files []*parser.FileMetrics) ([]*dependenci
 	return results, nil
 }
 
+// DetectCircularDependencies finds circular import chains between declared
+// packages. Only internal (project-declared) targets become graph edges;
+// self-edges are excluded so intra-package imports never report a cycle.
+func (a *DependencyAnalyzer) DetectCircularDependencies(files []*parser.FileMetrics) ([]*dependencies.CircularDependency, error) {
+	declared := declaredPackages(files)
+
+	graph := make(map[string][]string)
+	for pkgName, pkgFiles := range groupByPackage(files) {
+		seen := make(map[string]bool)
+		edges := []string{}
+		for _, file := range pkgFiles {
+			for _, imp := range file.Imports {
+				target := internalTarget(imp, declared)
+				if target == "" || target == pkgName || seen[target] {
+					continue
+				}
+				seen[target] = true
+				edges = append(edges, target)
+			}
+		}
+		sort.Strings(edges)
+		graph[pkgName] = edges
+	}
+
+	return dependencies.FindCycles(graph), nil
+}
+
 // declaredPackages collects the set of packages declared in the project.
 func declaredPackages(files []*parser.FileMetrics) map[string]bool {
 	declared := make(map[string]bool)

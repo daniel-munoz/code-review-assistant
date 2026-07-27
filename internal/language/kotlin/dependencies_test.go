@@ -165,3 +165,36 @@ func TestCategorizeImport(t *testing.T) {
 		assert.Equal(t, tc.want, categorizeImport(tc.imp, declared), tc.imp)
 	}
 }
+
+func TestDependencyAnalyzer_DetectCircularDependencies(t *testing.T) {
+	analyzer, err := NewDependencyAnalyzer(".")
+	require.NoError(t, err)
+
+	cycles, err := analyzer.DetectCircularDependencies(parseDepsFixtures(t))
+	require.NoError(t, err)
+
+	// alpha -> beta -> alpha is the only cycle; gamma and (root) only
+	// point INTO the cycle and must not appear in it.
+	require.Len(t, cycles, 1)
+	assert.Len(t, cycles[0].Cycle, 3)
+	assert.ElementsMatch(t, []string{"com.example.alpha", "com.example.beta"}, cycles[0].Cycle[:2])
+}
+
+func TestDependencyAnalyzer_DetectCircularDependencies_SelfImportExcluded(t *testing.T) {
+	analyzer, err := NewDependencyAnalyzer(".")
+	require.NoError(t, err)
+
+	// A package importing a sibling class from its own package must not
+	// produce a self-loop cycle.
+	files := []*parser.FileMetrics{
+		{
+			FilePath:    "solo.kt",
+			PackageName: "com.example.solo",
+			Imports:     []string{"com.example.solo.Helper"},
+		},
+	}
+
+	cycles, err := analyzer.DetectCircularDependencies(files)
+	require.NoError(t, err)
+	assert.Empty(t, cycles)
+}
