@@ -64,8 +64,8 @@ func (k *KotlinLanguage) CoverageRunner(cfg *config.AnalysisConfig, statusReport
 	return nil
 }
 
-// DependencyAnalyzer returns nil as Kotlin dependency analysis is not yet implemented.
-// Kotlin dependency analysis will be added in a future phase using Gradle manifests.
+// DependencyAnalyzer returns a Kotlin dependency analyzer grouping by
+// declared package.
 func (k *KotlinLanguage) DependencyAnalyzer(projectPath string) (language.DependencyAnalyzer, error) {
-	return nil, nil
+	return NewDependencyAnalyzer(projectPath)
 }

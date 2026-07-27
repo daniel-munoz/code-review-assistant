@@ -37,5 +37,5 @@ func TestKotlinLanguage_Components(t *testing.T) {
 
 	da, err := lang.DependencyAnalyzer(".")
 	assert.NoError(t, err)
-	assert.Nil(t, da, "dependency analysis not supported in first iteration")
+	assert.NotNil(t, da, "Kotlin supports dependency analysis")
 }
