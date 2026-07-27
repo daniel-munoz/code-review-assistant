@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<report name="aggregate">
+  <group name="core">
+    <package name="com/example/core">
+      <counter type="LINE" missed="2" covered="8"/>
+    </package>
+    <group name="nested">
+      <package name="">
+        <counter type="LINE" missed="0" covered="4"/>
+      </package>
+    </group>
+  </group>
+</report>
