@@ -134,8 +134,8 @@ func TestRun_SuccessCase(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config: cfg,
-		lang:   &mockLanguage{},
+		config:   cfg,
+		lang:     &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -160,8 +160,8 @@ func TestRun_NoFilesFound(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config: cfg,
-		lang:   &mockLanguage{},
+		config:   cfg,
+		lang:     &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -205,8 +205,8 @@ func TestRun_ParseErrors(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config: cfg,
-		lang:   &mockLanguage{},
+		config:   cfg,
+		lang:     &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -245,8 +245,8 @@ func TestRun_ManyParseErrors(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config: cfg,
-		lang:   &mockLanguage{},
+		config:   cfg,
+		lang:     &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -275,8 +275,8 @@ func TestRun_AnalyzerFailure(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config: cfg,
-		lang:   &mockLanguage{},
+		config:   cfg,
+		lang:     &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -309,8 +309,8 @@ func TestRun_ReporterFailure(t *testing.T) {
 	}
 
 	orch := &Orchestrator{
-		config: cfg,
-		lang:   &mockLanguage{},
+		config:   cfg,
+		lang:     &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,
@@ -340,8 +340,8 @@ func TestRun_ExcludePatterns(t *testing.T) {
 	mr := &mockReporter{}
 
 	orch := &Orchestrator{
-		config: cfg,
-		lang:   &mockLanguage{},
+		config:   cfg,
+		lang:     &mockLanguage{},
 		parser:   mp,
 		analyzer: ma,
 		reporter: mr,

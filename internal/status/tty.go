@@ -19,11 +19,11 @@ func IsTTY(fd uintptr) bool {
 //   - SilentReporter: If stderr is not a TTY, quiet mode is on, or output is redirected
 //
 // Logic:
-//   1. If QuietMode is true: return SilentReporter
-//   2. If ShowStatus is true: return TTYReporter (force enable)
-//   3. If OutputFile is set: return SilentReporter (output redirected)
-//   4. If stderr is a TTY: return TTYReporter
-//   5. Otherwise: return SilentReporter (piped/redirected)
+//  1. If QuietMode is true: return SilentReporter
+//  2. If ShowStatus is true: return TTYReporter (force enable)
+//  3. If OutputFile is set: return SilentReporter (output redirected)
+//  4. If stderr is a TTY: return TTYReporter
+//  5. Otherwise: return SilentReporter (piped/redirected)
 func NewReporter(cfg *config.OutputConfig) Reporter {
 	// Explicit disable via --quiet flag
 	if cfg.QuietMode {

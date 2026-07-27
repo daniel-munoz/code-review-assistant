@@ -236,12 +236,12 @@ func TestParseDirectory_WithExcludes(t *testing.T) {
 
 func TestCountLines(t *testing.T) {
 	tests := []struct {
-		name     string
-		content  string
-		total    int
-		code     int
-		comment  int
-		blank    int
+		name    string
+		content string
+		total   int
+		code    int
+		comment int
+		blank   int
 	}{
 		{
 			name:    "simple code",

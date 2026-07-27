@@ -91,27 +91,27 @@ func NewAnalyzer(
 // This is the main analysis pipeline that orchestrates all analysis phases:
 //
 // 1. Metrics Aggregation:
-//    - Accumulates file and function counts
-//    - Detects large files and long functions
-//    - Identifies high-complexity functions
+//   - Accumulates file and function counts
+//   - Detects large files and long functions
+//   - Identifies high-complexity functions
 //
 // 2. Anti-Pattern Detection:
-//    - Runs all enabled detectors (parameters, nesting, returns, magic numbers, etc.)
-//    - Requires re-parsing to obtain AST for pattern matching
+//   - Runs all enabled detectors (parameters, nesting, returns, magic numbers, etc.)
+//   - Requires re-parsing to obtain AST for pattern matching
 //
 // 3. Statistical Analysis:
-//    - Calculates aggregate metrics (averages, percentiles)
-//    - Identifies outliers (largest files, most complex functions)
-//    - Computes overall comment ratio
+//   - Calculates aggregate metrics (averages, percentiles)
+//   - Identifies outliers (largest files, most complex functions)
+//   - Computes overall comment ratio
 //
 // 4. Coverage Analysis (optional):
-//    - Runs go test -cover if enabled
-//    - Detects packages below coverage threshold
+//   - Runs go test -cover if enabled
+//   - Detects packages below coverage threshold
 //
 // 5. Dependency Analysis:
-//    - Categorizes imports (stdlib, internal, external)
-//    - Detects circular dependencies
-//    - Identifies packages with too many dependencies
+//   - Categorizes imports (stdlib, internal, external)
+//   - Detects circular dependencies
+//   - Identifies packages with too many dependencies
 //
 // The function is fault-tolerant: coverage and dependency failures produce
 // warnings but don't fail the entire analysis.

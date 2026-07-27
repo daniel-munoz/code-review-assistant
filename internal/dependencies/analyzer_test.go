@@ -119,10 +119,10 @@ func TestAnalyze(t *testing.T) {
 			{
 				PackageName: "analyzer",
 				Imports: []string{
-					"fmt",                 // stdlib
-					"strings",             // stdlib
+					"fmt",     // stdlib
+					"strings", // stdlib
 					"github.com/daniel-munoz/code-review-assistant/internal/parser", // internal
-					"github.com/spf13/viper",                                        // external
+					"github.com/spf13/viper", // external
 				},
 			},
 		}

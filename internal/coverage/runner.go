@@ -18,9 +18,9 @@ import (
 // PackageCoverage represents coverage data for a single package
 type PackageCoverage struct {
 	PackagePath string  `json:"package_path"`
-	Coverage    float64 `json:"coverage"`    // Percentage (0-100)
-	Error       string  `json:"error"`       // Empty if successful
-	Skipped     bool    `json:"skipped"`     // True if no tests found
+	Coverage    float64 `json:"coverage"` // Percentage (0-100)
+	Error       string  `json:"error"`    // Empty if successful
+	Skipped     bool    `json:"skipped"`  // True if no tests found
 }
 
 // Runner executes go test -cover for packages

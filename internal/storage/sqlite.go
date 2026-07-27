@@ -28,11 +28,12 @@ import (
 // and prepared statements for performance.
 //
 // Example usage:
-//   storage, err := NewSQLiteStorage("/path/to/history.db")
-//   if err != nil {
-//       return err
-//   }
-//   defer storage.Close()
+//
+//	storage, err := NewSQLiteStorage("/path/to/history.db")
+//	if err != nil {
+//	    return err
+//	}
+//	defer storage.Close()
 type SQLiteStorage struct {
 	db *sql.DB
 }
@@ -78,11 +79,12 @@ CREATE INDEX IF NOT EXISTS idx_timestamp
 // Returns an error if the database cannot be opened or initialized.
 //
 // Example:
-//   storage, err := NewSQLiteStorage(filepath.Join(homeDir, ".cra", "history.db"))
-//   if err != nil {
-//       return fmt.Errorf("failed to create storage: %w", err)
-//   }
-//   defer storage.Close()
+//
+//	storage, err := NewSQLiteStorage(filepath.Join(homeDir, ".cra", "history.db"))
+//	if err != nil {
+//	    return fmt.Errorf("failed to create storage: %w", err)
+//	}
+//	defer storage.Close()
 func NewSQLiteStorage(dbPath string) (*SQLiteStorage, error) {
 	// Expand home directory if present
 	if strings.HasPrefix(dbPath, "~/") {

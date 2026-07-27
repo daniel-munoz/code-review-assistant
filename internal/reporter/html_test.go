@@ -123,12 +123,12 @@ func TestHTMLReporter_Report_WithIssues(t *testing.T) {
 			Threshold: 10,
 		},
 		{
-			Severity: "warning",
-			Type:     "large_file",
-			Message:  "File exceeds maximum line count",
-			File:     "internal/large.go",
-			Line:     1,
-			Value:    600,
+			Severity:  "warning",
+			Type:      "large_file",
+			Message:   "File exceeds maximum line count",
+			File:      "internal/large.go",
+			Line:      1,
+			Value:     600,
 			Threshold: 500,
 		},
 	}

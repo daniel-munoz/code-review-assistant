@@ -11,12 +11,12 @@ import (
 
 // PackageDependencies represents dependency information for a single package
 type PackageDependencies struct {
-	PackageName        string   `json:"package_name"`
-	StdlibImports      []string `json:"stdlib_imports"`
-	InternalImports    []string `json:"internal_imports"`
-	ExternalImports    []string `json:"external_imports"`
-	TotalImports       int      `json:"total_imports"`
-	ExternalImportCount int     `json:"external_import_count"`
+	PackageName         string   `json:"package_name"`
+	StdlibImports       []string `json:"stdlib_imports"`
+	InternalImports     []string `json:"internal_imports"`
+	ExternalImports     []string `json:"external_imports"`
+	TotalImports        int      `json:"total_imports"`
+	ExternalImportCount int      `json:"external_import_count"`
 }
 
 // Analyzer analyzes package dependencies

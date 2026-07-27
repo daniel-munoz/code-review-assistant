@@ -41,10 +41,11 @@ type Info struct {
 //   - Info struct with commit and branch (may be empty if not a Git repo)
 //
 // Example:
-//   info := git.ExtractInfo("/path/to/project")
-//   if info.Commit != "" {
-//       fmt.Printf("Analyzed commit: %s on branch %s\n", info.Commit, info.Branch)
-//   }
+//
+//	info := git.ExtractInfo("/path/to/project")
+//	if info.Commit != "" {
+//	    fmt.Printf("Analyzed commit: %s on branch %s\n", info.Commit, info.Branch)
+//	}
 func ExtractInfo(projectPath string) Info {
 	info := Info{}
 

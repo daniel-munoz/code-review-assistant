@@ -85,13 +85,13 @@ func TestMarkdownReporter_Report_WithIssues(t *testing.T) {
 
 	issues := []*analyzer.Issue{
 		{
-			Severity: "warning",
-			Type:     "high_complexity",
-			Message:  "Function has high cyclomatic complexity",
-			File:     "internal/test.go",
-			Line:     42,
-			Function: "TestFunction",
-			Value:    15,
+			Severity:  "warning",
+			Type:      "high_complexity",
+			Message:   "Function has high cyclomatic complexity",
+			File:      "internal/test.go",
+			Line:      42,
+			Function:  "TestFunction",
+			Value:     15,
 			Threshold: 10,
 		},
 		{
@@ -367,8 +367,8 @@ func TestMarkdownReporter_CircularDependencies(t *testing.T) {
 	}
 
 	dependencies := &analyzer.DependencyReport{
-		TotalPackages:    3,
-		HighImportCount:  0,
+		TotalPackages:     3,
+		HighImportCount:   0,
 		HighExternalCount: 0,
 		Packages: []*analyzer.PackageDependencies{
 			{PackageName: "pkg1", TotalImports: 5},

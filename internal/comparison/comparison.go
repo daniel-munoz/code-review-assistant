@@ -31,8 +31,9 @@ type Comparator struct {
 //   - stableThreshold: Percentage (0-100) for stable detection (e.g., 5.0 for 5%)
 //
 // Example:
-//   comp := NewComparator(5.0)
-//   result := comp.Compare(currentResult, previousResult)
+//
+//	comp := NewComparator(5.0)
+//	result := comp.Compare(currentResult, previousResult)
 func NewComparator(stableThreshold float64) *Comparator {
 	if stableThreshold <= 0 {
 		stableThreshold = 5.0 // Default to 5%
@@ -56,11 +57,12 @@ func NewComparator(stableThreshold float64) *Comparator {
 //   - ComparisonResult with deltas, trends, and issue changes
 //
 // Example:
-//   comp := NewComparator(5.0)
-//   comparison := comp.Compare(currentResult, previousResult, previousTimestamp)
-//   if comparison.Trends.Complexity == TrendImproving {
-//       fmt.Println("Complexity is improving!")
-//   }
+//
+//	comp := NewComparator(5.0)
+//	comparison := comp.Compare(currentResult, previousResult, previousTimestamp)
+//	if comparison.Trends.Complexity == TrendImproving {
+//	    fmt.Println("Complexity is improving!")
+//	}
 func (c *Comparator) Compare(current, previous *analyzer.AnalysisResult, previousTimestamp time.Time) *ComparisonResult {
 	if previous == nil {
 		return nil

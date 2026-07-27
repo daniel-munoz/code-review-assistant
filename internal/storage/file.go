@@ -16,7 +16,8 @@ import (
 // FileStorage implements Storage using JSON files in a directory hierarchy.
 //
 // Reports are stored in a directory structure like:
-//   {basePath}/history/{project-hash}/{timestamp}_{id-prefix}.json
+//
+//	{basePath}/history/{project-hash}/{timestamp}_{id-prefix}.json
 //
 // Where:
 //   - basePath: Root storage directory (e.g., ~/.cra or ./.cra)
@@ -31,12 +32,13 @@ import (
 //   - Uniqueness (UUID prefix prevents collisions)
 //
 // Example directory structure:
-//   ~/.cra/history/
-//     a1b2c3d4e5f6g7h8/
-//       2025-12-20_14-30-45_abc123.json
-//       2025-12-20_15-22-10_def456.json
-//     9f8e7d6c5b4a3210/
-//       2025-12-19_10-15-30_ghi789.json
+//
+//	~/.cra/history/
+//	  a1b2c3d4e5f6g7h8/
+//	    2025-12-20_14-30-45_abc123.json
+//	    2025-12-20_15-22-10_def456.json
+//	  9f8e7d6c5b4a3210/
+//	    2025-12-19_10-15-30_ghi789.json
 type FileStorage struct {
 	basePath string // Root directory for storage
 }
@@ -51,11 +53,12 @@ type FileStorage struct {
 // Returns an error if the directory cannot be created or accessed.
 //
 // Example:
-//   storage, err := NewFileStorage(filepath.Join(homeDir, ".cra"))
-//   if err != nil {
-//       return fmt.Errorf("failed to create storage: %w", err)
-//   }
-//   defer storage.Close()
+//
+//	storage, err := NewFileStorage(filepath.Join(homeDir, ".cra"))
+//	if err != nil {
+//	    return fmt.Errorf("failed to create storage: %w", err)
+//	}
+//	defer storage.Close()
 func NewFileStorage(basePath string) (*FileStorage, error) {
 	// Expand home directory if present
 	if strings.HasPrefix(basePath, "~/") {
