@@ -1,10 +1,14 @@
 package analyzer
 
 import (
+	"bytes"
+	"errors"
+	"os"
 	"testing"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer/detectors"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
+	"github.com/daniel-munoz/code-review-assistant/internal/coverage"
 	"github.com/daniel-munoz/code-review-assistant/internal/parser"
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
 	"github.com/stretchr/testify/assert"
@@ -609,4 +613,61 @@ func TestAnalyze_ParallelVsSequential(t *testing.T) {
 
 	// File analysis count should match
 	assert.Equal(t, len(seqResult.Files), len(parResult.Files), "File analysis count should match")
+}
+
+// erroringCoverageRunner always fails, simulating an environment where the
+// coverage tool (e.g. Kover/JaCoCo for Kotlin) isn't available.
+type erroringCoverageRunner struct{}
+
+func (m *erroringCoverageRunner) RunCoverage(projectPath string, excludePatterns []string) ([]*coverage.PackageCoverage, error) {
+	return nil, errors.New("coverage tool not found")
+}
+
+// erroringDependencyAnalyzerFactory always fails to build a DependencyAnalyzer.
+func erroringDependencyAnalyzerFactory(projectPath string) (DependencyAnalyzer, error) {
+	return nil, errors.New("dependency analyzer unavailable")
+}
+
+// TestAnalyze_WarningsDoNotCorruptStdout is a regression test: the JSON
+// reporter writes to stdout, so any diagnostic warnings printed via
+// fmt.Printf would corrupt --format json output. Coverage and dependency
+// failures must be reported on stderr instead.
+func TestAnalyze_WarningsDoNotCorruptStdout(t *testing.T) {
+	t.Run("coverage and dependency failures do not write to stdout", func(t *testing.T) {
+		cfg := config.Default()
+		cfg.Analysis.EnableCoverage = true
+		cfg.Analysis.DetectCircularDeps = true
+
+		analyzer := NewAnalyzer(
+			&cfg.Analysis,
+			status.NewSilentReporter(),
+			&mockDetectorRunner{},
+			&erroringCoverageRunner{},
+			erroringDependencyAnalyzerFactory,
+		)
+
+		metrics := []*parser.FileMetrics{
+			{FilePath: "test.go", PackageName: "test"},
+		}
+
+		// Redirect os.Stdout to a pipe for the duration of Analyze so we can
+		// assert nothing lands there.
+		origStdout := os.Stdout
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stdout = w
+
+		result, analyzeErr := analyzer.Analyze("/test/project", metrics)
+
+		require.NoError(t, w.Close())
+		os.Stdout = origStdout
+
+		var captured bytes.Buffer
+		_, readErr := captured.ReadFrom(r)
+		require.NoError(t, readErr)
+
+		require.NoError(t, analyzeErr)
+		require.NotNil(t, result)
+		assert.Empty(t, captured.String(), "coverage/dependency warnings must not be written to stdout")
+	})
 }
