@@ -24,16 +24,16 @@ type Issue = detectors.Issue
 // The result is designed to be serializable to JSON for programmatic consumption
 // and can be passed to any Reporter implementation for output formatting.
 type AnalysisResult struct {
-	ProjectPath    string              `json:"project_path"`
-	TotalFiles     int                 `json:"total_files"`
-	TotalLines     int                 `json:"total_lines"`
-	TotalCodeLines int                 `json:"total_code_lines"`
-	TotalFunctions int                 `json:"total_functions"`
-	Metrics        *AggregateMetrics   `json:"metrics"`
-	Files          []*FileAnalysis     `json:"files"`
-	Issues         []*Issue            `json:"issues"`
-	Coverage       *CoverageReport     `json:"coverage,omitempty"`
-	Dependencies   *DependencyReport   `json:"dependencies,omitempty"`
+	ProjectPath    string            `json:"project_path"`
+	TotalFiles     int               `json:"total_files"`
+	TotalLines     int               `json:"total_lines"`
+	TotalCodeLines int               `json:"total_code_lines"`
+	TotalFunctions int               `json:"total_functions"`
+	Metrics        *AggregateMetrics `json:"metrics"`
+	Files          []*FileAnalysis   `json:"files"`
+	Issues         []*Issue          `json:"issues"`
+	Coverage       *CoverageReport   `json:"coverage,omitempty"`
+	Dependencies   *DependencyReport `json:"dependencies,omitempty"`
 }
 
 // AggregateMetrics contains statistical aggregations across all analyzed files.
@@ -52,7 +52,7 @@ type AggregateMetrics struct {
 	CommentRatio          float64         `json:"comment_ratio"`       // Overall comment ratio
 	LargestFiles          []*FileSize     `json:"largest_files"`       // Top 10
 	AverageComplexity     float64         `json:"average_complexity"`
-	ComplexityP95         int             `json:"complexity_p95"` // 95th percentile
+	ComplexityP95         int             `json:"complexity_p95"`         // 95th percentile
 	MostComplexFunctions  []*FunctionInfo `json:"most_complex_functions"` // Top 10
 }
 
@@ -132,8 +132,8 @@ type DependencyReport struct {
 	Packages             []*PackageDependencies `json:"packages"`
 	CircularDependencies []*CircularDependency  `json:"circular_dependencies,omitempty"`
 	TotalPackages        int                    `json:"total_packages"`
-	HighImportCount      int                    `json:"high_import_count"`      // Packages exceeding import threshold
-	HighExternalCount    int                    `json:"high_external_count"`    // Packages with too many external deps
+	HighImportCount      int                    `json:"high_import_count"`   // Packages exceeding import threshold
+	HighExternalCount    int                    `json:"high_external_count"` // Packages with too many external deps
 }
 
 // PackageDependencies represents import analysis for a single Go package.
@@ -158,7 +158,8 @@ type PackageDependencies struct {
 //
 // The Cycle field contains the package names forming the circular chain,
 // where the first and last packages create the cycle. For example:
-//   ["pkg/a", "pkg/b", "pkg/c", "pkg/a"]
+//
+//	["pkg/a", "pkg/b", "pkg/c", "pkg/a"]
 //
 // Circular dependencies prevent compilation and indicate architectural
 // problems that should be resolved by restructuring package boundaries.

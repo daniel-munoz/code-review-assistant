@@ -487,8 +487,8 @@ func TestAnalyze_MultipleIssueTypes(t *testing.T) {
 				Functions: []*parser.FunctionMetrics{
 					{
 						Name:       "BadFunc",
-						Lines:      75,  // Triggers long_function
-						Complexity: 20,  // Triggers high_complexity
+						Lines:      75, // Triggers long_function
+						Complexity: 20, // Triggers high_complexity
 						StartLine:  10,
 					},
 				},

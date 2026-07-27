@@ -138,11 +138,11 @@ type ReportMetadata struct {
 	GitBranch string `json:"git_branch,omitempty"`
 
 	// Summary metrics (optional, for quick display)
-	TotalFiles     int     `json:"total_files,omitempty"`
-	TotalLines     int     `json:"total_lines,omitempty"`
-	AvgComplexity  float64 `json:"avg_complexity,omitempty"`
-	AvgCoverage    float64 `json:"avg_coverage,omitempty"`
-	IssueCount     int     `json:"issue_count,omitempty"`
+	TotalFiles    int     `json:"total_files,omitempty"`
+	TotalLines    int     `json:"total_lines,omitempty"`
+	AvgComplexity float64 `json:"avg_complexity,omitempty"`
+	AvgCoverage   float64 `json:"avg_coverage,omitempty"`
+	IssueCount    int     `json:"issue_count,omitempty"`
 }
 
 // ListOptions specifies filtering and pagination for Storage.List().
@@ -153,11 +153,12 @@ type ReportMetadata struct {
 //   - Filter by date range (since/until)
 //
 // Example:
-//   // Get last 10 reports from the past week
-//   opts := ListOptions{
-//       Limit: 10,
-//       Since: time.Now().AddDate(0, 0, -7),
-//   }
+//
+//	// Get last 10 reports from the past week
+//	opts := ListOptions{
+//	    Limit: 10,
+//	    Since: time.Now().AddDate(0, 0, -7),
+//	}
 type ListOptions struct {
 	// Maximum number of results to return (0 = unlimited)
 	Limit int

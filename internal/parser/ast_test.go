@@ -11,18 +11,18 @@ import (
 
 func TestParseFile(t *testing.T) {
 	testCases := []struct {
-		name             string
-		filePath         string
-		expectError      bool
-		expectedPackage  string
+		name              string
+		filePath          string
+		expectError       bool
+		expectedPackage   string
 		expectedFuncCount int
-		validateFunc     func(t *testing.T, metrics *FileMetrics)
+		validateFunc      func(t *testing.T, metrics *FileMetrics)
 	}{
 		{
-			name:             "parse main.go",
-			filePath:         "../../testdata/sample/main.go",
-			expectError:      false,
-			expectedPackage:  "sample",
+			name:              "parse main.go",
+			filePath:          "../../testdata/sample/main.go",
+			expectError:       false,
+			expectedPackage:   "sample",
 			expectedFuncCount: 4, // main, Add, Calculate, checkEnvironment
 			validateFunc: func(t *testing.T, metrics *FileMetrics) {
 				assert.Greater(t, metrics.TotalLines, 0, "should have lines")
@@ -57,10 +57,10 @@ func TestParseFile(t *testing.T) {
 			},
 		},
 		{
-			name:             "parse util.go with methods",
-			filePath:         "../../testdata/sample/util.go",
-			expectError:      false,
-			expectedPackage:  "sample",
+			name:              "parse util.go with methods",
+			filePath:          "../../testdata/sample/util.go",
+			expectError:       false,
+			expectedPackage:   "sample",
 			expectedFuncCount: 6, // 3 methods + 3 functions
 			validateFunc: func(t *testing.T, metrics *FileMetrics) {
 				// Count methods vs functions
@@ -88,10 +88,10 @@ func TestParseFile(t *testing.T) {
 			},
 		},
 		{
-			name:             "parse large.go",
-			filePath:         "../../testdata/sample/large.go",
-			expectError:      false,
-			expectedPackage:  "sample",
+			name:              "parse large.go",
+			filePath:          "../../testdata/sample/large.go",
+			expectError:       false,
+			expectedPackage:   "sample",
 			expectedFuncCount: 61, // 60 ProcessData + 1 LongFunction
 			validateFunc: func(t *testing.T, metrics *FileMetrics) {
 				assert.Greater(t, metrics.TotalLines, 500, "large.go should exceed 500 lines")

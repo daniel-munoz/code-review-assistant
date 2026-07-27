@@ -2,9 +2,9 @@ package constants
 
 // Console output formatting constants
 const (
-	SectionSeparatorLength = 60  // Length of separator lines in console output
-	TableColumnPadding     = 2   // Padding between table columns
-	MinColumnWidth         = 10  // Minimum column width for tables
+	SectionSeparatorLength = 60 // Length of separator lines in console output
+	TableColumnPadding     = 2  // Padding between table columns
+	MinColumnWidth         = 10 // Minimum column width for tables
 )
 
 // Number formatting constants
