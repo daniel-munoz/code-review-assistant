@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,6 +99,11 @@ var jacocoApplyRes = []*regexp.Regexp{
 	regexp.MustCompile(`(?m)^\s*jacoco\s*$`),
 }
 
+// unsupportedClassFileRe matches the Groovy failure produced when the JVM
+// running Gradle is newer than that Gradle release supports. The captured
+// class file major version maps to a JDK release as (major - 44).
+var unsupportedClassFileRe = regexp.MustCompile(`Unsupported class file major version (\d+)`)
+
 func stripComments(s string) string {
 	s = blockCommentRe.ReplaceAllString(s, " ")
 	return lineCommentRe.ReplaceAllString(s, "")
@@ -169,6 +175,11 @@ func NewCoverageRunner(timeoutSeconds int, statusReporter status.Reporter) *Cove
 // RunCoverage runs the Gradle coverage task and parses the reports.
 // excludePatterns is unused: exclusions are governed by the Gradle build
 // itself (mirroring the JS runner, which also ignores them).
+//
+// When the Gradle run fails but wrote valid reports (e.g. one module's tests
+// failed while others completed), those reports are returned ALONGSIDE a
+// non-nil error, so the caller can use the partial coverage and still surface
+// the failure.
 func (r *CoverageRunner) RunCoverage(projectPath string, excludePatterns []string) ([]*coverage.PackageCoverage, error) {
 	r.status.Update("[COVERAGE] Detecting Gradle build...")
 	gradleCmd, err := detectGradleCommand(projectPath)
@@ -181,8 +192,21 @@ func (r *CoverageRunner) RunCoverage(projectPath string, excludePatterns []strin
 	}
 
 	r.status.Update(fmt.Sprintf("[COVERAGE] Running Gradle task %s...", task.name))
-	if err := r.runGradle(projectPath, gradleCmd, task); err != nil {
-		return nil, err
+	start := time.Now()
+	if runErr := r.runGradle(projectPath, gradleCmd, task); runErr != nil {
+		// A handful of failing tests (often environment-dependent) shouldn't
+		// discard the coverage every other module produced. Only reports
+		// written by THIS run count: a stale report from an earlier run would
+		// silently misreport old coverage as current.
+		fresh := reportsWrittenSince(findReports(projectPath, task.reportGlobs), start.Add(-time.Second))
+		if len(fresh) == 0 {
+			return nil, runErr
+		}
+		results, parseErr := parseReports(fresh)
+		if parseErr != nil {
+			return nil, runErr
+		}
+		return results, fmt.Errorf("coverage may be incomplete — %d report(s) parsed from a failed Gradle run: %w", len(fresh), runErr)
 	}
 
 	r.status.Update("[COVERAGE] Parsing coverage reports...")
@@ -204,7 +228,11 @@ func (r *CoverageRunner) runGradle(projectPath, command string, task *gradleTask
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, command, task.args...)
+	// --continue lets independent modules finish (and write their reports)
+	// even when one module's tests fail, maximizing what a partial run can
+	// salvage.
+	args := append(append([]string{}, task.args...), "--continue")
+	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Dir = projectPath
 	// A killed Gradle can leave children (the JVM/daemon) holding our stdout
 	// pipe; without a WaitDelay, CombinedOutput would block until they exit,
@@ -226,6 +254,11 @@ func (r *CoverageRunner) runGradle(projectPath, command string, task *gradleTask
 		if strings.Contains(out, "not found in root project") || strings.Contains(out, "not found in project") {
 			return fmt.Errorf("gradle has no task %q — the coverage plugin is applied in the Gradle build files but the task is missing (e.g. the plugin is applied conditionally, or only in subprojects this invocation doesn't configure): %w\n%s",
 				task.name, err, outputTail(out))
+		}
+		if m := unsupportedClassFileRe.FindStringSubmatch(out); m != nil {
+			major, _ := strconv.Atoi(m[1])
+			return fmt.Errorf("gradle %s failed: this project's Gradle release cannot run on the current JDK (Java %d); set JAVA_HOME to an older JDK this Gradle version supports: %w\n%s",
+				task.name, major-44, err, outputTail(out))
 		}
 		if tail := outputTail(out); tail != "" {
 			return fmt.Errorf("gradle %s failed: %w\n%s", task.name, err, tail)
@@ -249,6 +282,19 @@ func outputTail(s string) string {
 // the tool that actually ran keeps a stale report left behind by the other
 // tool (e.g. a leftover jacocoTestReport.xml after migrating to Kover) from
 // silently blending into the results.
+// reportsWrittenSince filters report paths down to those modified after the
+// given instant — i.e. written by the Gradle run that just executed, not left
+// behind by an earlier one.
+func reportsWrittenSince(paths []string, since time.Time) []string {
+	var fresh []string
+	for _, p := range paths {
+		if info, err := os.Stat(p); err == nil && info.ModTime().After(since) {
+			fresh = append(fresh, p)
+		}
+	}
+	return fresh
+}
+
 func findReports(projectPath string, patterns []string) []string {
 	var reports []string
 	for _, pattern := range patterns {

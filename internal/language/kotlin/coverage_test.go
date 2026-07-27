@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
 	"github.com/stretchr/testify/assert"
@@ -453,6 +454,92 @@ plugins {
 	_, err := runner.RunCoverage(dir, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "applied conditionally", "task-not-found should hint why an applied plugin may still lack the task")
+}
+
+func TestRunCoverage_PartialReportsSalvagedWhenGradleFails(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `id("org.jetbrains.kotlinx.kover")`)
+
+	// Gradle writes a valid report for a module that completed, then fails
+	// overall (e.g. another module's tests failed).
+	reportPath := filepath.Join(dir, "build", "reports", "kover", "report.xml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(reportPath), 0o755))
+	script := "#!/bin/sh\ncat > \"" + reportPath + "\" <<'EOF'\n" +
+		`<?xml version="1.0" encoding="UTF-8"?>
+<report name="fake">
+  <package name="com/example/alpha">
+    <counter type="LINE" missed="5" covered="15"/>
+  </package>
+</report>` + "\nEOF\n" +
+		"echo '52 tests failed' >&2\nexit 1\n"
+	writeGradleFile(t, filepath.Join(dir, "gradlew"), script)
+	require.NoError(t, os.Chmod(filepath.Join(dir, "gradlew"), 0o755))
+
+	runner := NewCoverageRunner(60, &status.SilentReporter{})
+	results, err := runner.RunCoverage(dir, nil)
+	require.Error(t, err, "the failure must still be surfaced so the caller can warn")
+	assert.Contains(t, err.Error(), "coverage may be incomplete")
+	require.Len(t, results, 1, "reports written by the failed run must be salvaged")
+	assert.InDelta(t, 75.0, results[0].Coverage, 0.001)
+}
+
+func TestRunCoverage_StaleReportNotSalvagedWhenGradleFails(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `id("org.jetbrains.kotlinx.kover")`)
+
+	// A report from an earlier run must not be presented as this run's
+	// coverage when Gradle fails without producing anything.
+	reportPath := filepath.Join(dir, "build", "reports", "kover", "report.xml")
+	writeGradleFile(t, reportPath,
+		`<?xml version="1.0"?><report name="stale"><package name="com/example/alpha"><counter type="LINE" missed="1" covered="1"/></package></report>`)
+	old := time.Now().Add(-time.Hour)
+	require.NoError(t, os.Chtimes(reportPath, old, old))
+
+	writeGradleFile(t, filepath.Join(dir, "gradlew"), "#!/bin/sh\necho 'compilation failed' >&2\nexit 1\n")
+	require.NoError(t, os.Chmod(filepath.Join(dir, "gradlew"), 0o755))
+
+	runner := NewCoverageRunner(60, &status.SilentReporter{})
+	results, err := runner.RunCoverage(dir, nil)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "coverage may be incomplete")
+	assert.Empty(t, results)
+}
+
+func TestRunCoverage_PassesContinueFlag(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `id("org.jetbrains.kotlinx.kover")`)
+
+	reportPath := filepath.Join(dir, "build", "reports", "kover", "report.xml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(reportPath), 0o755))
+	argsPath := filepath.Join(dir, "args.txt")
+	script := "#!/bin/sh\necho \"$@\" > \"" + argsPath + "\"\ncat > \"" + reportPath + "\" <<'EOF'\n" +
+		`<?xml version="1.0"?><report name="fake"><package name="com/example/alpha"><counter type="LINE" missed="5" covered="15"/></package></report>` + "\nEOF\n"
+	writeGradleFile(t, filepath.Join(dir, "gradlew"), script)
+	require.NoError(t, os.Chmod(filepath.Join(dir, "gradlew"), 0o755))
+
+	runner := NewCoverageRunner(60, &status.SilentReporter{})
+	_, err := runner.RunCoverage(dir, nil)
+	require.NoError(t, err)
+
+	args, readErr := os.ReadFile(argsPath)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(args), "--continue",
+		"one module's failure must not stop other modules' reports from generating")
+}
+
+func TestRunCoverage_UnsupportedJdkGetsFriendlyHint(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `id("org.jetbrains.kotlinx.kover")`)
+	// Gradle 7.x on a too-new JVM dies while parsing the build scripts.
+	writeGradleFile(t, filepath.Join(dir, "gradlew"),
+		"#!/bin/sh\necho \"BUG! exception in phase 'semantic analysis' in source unit '_BuildScript_' Unsupported class file major version 64\" >&2\nexit 1\n")
+	require.NoError(t, os.Chmod(filepath.Join(dir, "gradlew"), 0o755))
+
+	runner := NewCoverageRunner(60, &status.SilentReporter{})
+	_, err := runner.RunCoverage(dir, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Java 20", "class file major version 64 must be translated to the JDK release")
+	assert.Contains(t, err.Error(), "JAVA_HOME", "the fix is pointing JAVA_HOME at an older JDK")
 }
 
 func TestRunCoverage_TimeoutSurfaced(t *testing.T) {

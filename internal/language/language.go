@@ -77,6 +77,9 @@ type DetectorRunner interface {
 type CoverageRunner interface {
 	// RunCoverage runs test coverage analysis for the project.
 	// Returns per-package coverage results or an error if coverage cannot be run.
+	// Implementations may return partial results ALONGSIDE a non-nil error
+	// (e.g. reports salvaged from a run where some tests failed); callers
+	// should use the results and still surface the error.
 	RunCoverage(projectPath string, excludePatterns []string) ([]*coverage.PackageCoverage, error)
 }
 
