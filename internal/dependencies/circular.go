@@ -21,6 +21,11 @@ func (a *Analyzer) DetectCircularDependencies(files []*parser.FileMetrics) ([]*C
 // FindCycles detects circular dependencies in a package graph using DFS.
 // The graph maps each package to the packages it imports. Language providers
 // build their own graph and delegate cycle detection here.
+//
+// Results are order-dependent: the algorithm reports a representative set of
+// cycles per strongly-connected component, not all simple cycles, and both
+// the reported set and each cycle's starting node depend on Go's randomized
+// map iteration order.
 func FindCycles(graph map[string][]string) []*CircularDependency {
 	return newCycleDetector(graph).findCycles()
 }
