@@ -183,8 +183,11 @@ func TestFindReports_KoverAndMultiModule(t *testing.T) {
 	dir := t.TempDir()
 	writeGradleFile(t, filepath.Join(dir, "build", "reports", "kover", "report.xml"), "<report/>")
 	writeGradleFile(t, filepath.Join(dir, "app", "build", "reports", "kover", "report.xml"), "<report/>")
+	// Stale report from the other tool: must never be returned when
+	// searching for Kover's locations.
+	writeGradleFile(t, filepath.Join(dir, "build", "reports", "jacoco", "test", "jacocoTestReport.xml"), "<report/>")
 
-	reports := findReports(dir)
+	reports := findReports(dir, koverReportGlobs)
 
 	assert.ElementsMatch(t, []string{
 		filepath.Join(dir, "build", "reports", "kover", "report.xml"),
@@ -196,7 +199,7 @@ func TestFindReports_JaCoCo(t *testing.T) {
 	dir := t.TempDir()
 	writeGradleFile(t, filepath.Join(dir, "build", "reports", "jacoco", "test", "jacocoTestReport.xml"), "<report/>")
 
-	reports := findReports(dir)
+	reports := findReports(dir, jacocoReportGlobs)
 
 	assert.Equal(t, []string{
 		filepath.Join(dir, "build", "reports", "jacoco", "test", "jacocoTestReport.xml"),
@@ -204,7 +207,7 @@ func TestFindReports_JaCoCo(t *testing.T) {
 }
 
 func TestFindReports_NoneFound(t *testing.T) {
-	assert.Empty(t, findReports(t.TempDir()))
+	assert.Empty(t, findReports(t.TempDir(), koverReportGlobs))
 }
 
 // TestRunCoverage_EndToEnd fakes Gradle with a shell script that writes a
@@ -216,7 +219,7 @@ func TestRunCoverage_EndToEnd(t *testing.T) {
 
 	reportPath := filepath.Join(dir, "build", "reports", "kover", "report.xml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(reportPath), 0o755))
-	script := "#!/bin/sh\ncat > " + reportPath + " <<'EOF'\n" +
+	script := "#!/bin/sh\ncat > \"" + reportPath + "\" <<'EOF'\n" +
 		`<?xml version="1.0" encoding="UTF-8"?>
 <report name="fake">
   <package name="com/example/alpha">
@@ -232,6 +235,60 @@ func TestRunCoverage_EndToEnd(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Equal(t, "com.example.alpha", results[0].PackagePath)
 	assert.InDelta(t, 75.0, results[0].Coverage, 0.001)
+}
+
+func TestRunCoverage_StaleOtherToolReportIgnored(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `id("org.jetbrains.kotlinx.kover")`)
+
+	// Stale JaCoCo report from before a migration to Kover, with divergent numbers.
+	writeGradleFile(t, filepath.Join(dir, "build", "reports", "jacoco", "test", "jacocoTestReport.xml"),
+		`<?xml version="1.0"?><report name="stale"><package name="com/example/alpha"><counter type="LINE" missed="100" covered="0"/></package></report>`)
+
+	reportPath := filepath.Join(dir, "build", "reports", "kover", "report.xml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(reportPath), 0o755))
+	script := "#!/bin/sh\ncat > \"" + reportPath + "\" <<'EOF'\n" +
+		`<?xml version="1.0" encoding="UTF-8"?>
+<report name="fake">
+  <package name="com/example/alpha">
+    <counter type="LINE" missed="5" covered="15"/>
+  </package>
+</report>` + "\nEOF\n"
+	writeGradleFile(t, filepath.Join(dir, "gradlew"), script)
+	require.NoError(t, os.Chmod(filepath.Join(dir, "gradlew"), 0o755))
+
+	runner := NewCoverageRunner(60, &status.SilentReporter{})
+	results, err := runner.RunCoverage(dir, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.InDelta(t, 75.0, results[0].Coverage, 0.001,
+		"stale JaCoCo report must not blend into Kover results")
+}
+
+func TestRunCoverage_SucceedsWhenDaemonHoldsPipe(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `id("org.jetbrains.kotlinx.kover")`)
+
+	reportPath := filepath.Join(dir, "build", "reports", "kover", "report.xml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(reportPath), 0o755))
+	// Exits 0 immediately but leaves a background child holding stdout,
+	// like a spawned Gradle daemon; WaitDelay drains after ~2s and the
+	// run must still be treated as a success.
+	script := "#!/bin/sh\ncat > \"" + reportPath + "\" <<'EOF'\n" +
+		`<?xml version="1.0" encoding="UTF-8"?>
+<report name="fake">
+  <package name="com/example/alpha">
+    <counter type="LINE" missed="5" covered="15"/>
+  </package>
+</report>` + "\nEOF\n" +
+		"sleep 4 &\nexit 0\n"
+	writeGradleFile(t, filepath.Join(dir, "gradlew"), script)
+	require.NoError(t, os.Chmod(filepath.Join(dir, "gradlew"), 0o755))
+
+	runner := NewCoverageRunner(60, &status.SilentReporter{})
+	results, err := runner.RunCoverage(dir, nil)
+	require.NoError(t, err, "a successful build with a lingering daemon must not be reported as failure")
+	require.Len(t, results, 1)
 }
 
 func TestRunCoverage_NoReportAfterRunErrors(t *testing.T) {

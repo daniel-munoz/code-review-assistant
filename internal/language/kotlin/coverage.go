@@ -2,6 +2,7 @@ package kotlin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,10 +19,29 @@ import (
 // coverage tool. Its XML report is JaCoCo-format.
 const koverPluginID = "org.jetbrains.kotlinx.kover"
 
+// gradlePipeDrainDelay bounds how long runGradle waits for a killed Gradle's
+// orphaned children (e.g. the daemon JVM) to release our stdout/stderr pipe
+// after the process itself has exited or been cancelled.
+const gradlePipeDrainDelay = 2 * time.Second
+
+// Report locations per tool, for the root project and first-level
+// subprojects (multi-module builds).
+var (
+	koverReportGlobs = []string{
+		filepath.Join("build", "reports", "kover", "report.xml"),
+		filepath.Join("*", "build", "reports", "kover", "report.xml"),
+	}
+	jacocoReportGlobs = []string{
+		filepath.Join("build", "reports", "jacoco", "test", "jacocoTestReport.xml"),
+		filepath.Join("*", "build", "reports", "jacoco", "test", "jacocoTestReport.xml"),
+	}
+)
+
 // gradleTask is the Gradle invocation that produces a coverage report.
 type gradleTask struct {
-	name string   // for status/error messages, e.g. "koverXmlReport"
-	args []string // Gradle CLI arguments
+	name        string   // for status/error messages, e.g. "koverXmlReport"
+	args        []string // Gradle CLI arguments
+	reportGlobs []string // where this tool writes its XML reports
 }
 
 // detectGradleCommand locates the Gradle wrapper in the project root, or
@@ -62,10 +82,10 @@ func detectCoverageTask(projectPath string) (*gradleTask, error) {
 	content := readGradleBuildFiles(projectPath)
 
 	if strings.Contains(content, koverPluginID) {
-		return &gradleTask{name: "koverXmlReport", args: []string{"koverXmlReport"}}, nil
+		return &gradleTask{name: "koverXmlReport", args: []string{"koverXmlReport"}, reportGlobs: koverReportGlobs}, nil
 	}
 	if strings.Contains(content, "jacoco") {
-		return &gradleTask{name: "jacocoTestReport", args: []string{"test", "jacocoTestReport"}}, nil
+		return &gradleTask{name: "jacocoTestReport", args: []string{"test", "jacocoTestReport"}, reportGlobs: jacocoReportGlobs}, nil
 	}
 	return nil, fmt.Errorf("no coverage plugin detected in Gradle build files; apply Kover (%s) or JaCoCo to enable coverage", koverPluginID)
 }
@@ -134,7 +154,7 @@ func (r *CoverageRunner) RunCoverage(projectPath string, excludePatterns []strin
 	}
 
 	r.status.Update("[COVERAGE] Parsing coverage reports...")
-	reports := findReports(projectPath)
+	reports := findReports(projectPath, task.reportGlobs)
 	if len(reports) == 0 {
 		return nil, fmt.Errorf("no coverage report found after Gradle run; check the %s report task configuration", task.name)
 	}
@@ -144,7 +164,10 @@ func (r *CoverageRunner) RunCoverage(projectPath string, excludePatterns []strin
 // runGradle executes the Gradle coverage task with a timeout. Failures embed
 // the task name and a bounded excerpt of Gradle's combined output, because
 // plugin detection is heuristic and the output is what makes its false
-// positives ("Task 'jacocoTestReport' not found") diagnosable.
+// positives ("Task 'jacocoTestReport' not found") diagnosable. A run that
+// hits the timeout surfaces its error only after timeout + gradlePipeDrainDelay,
+// since CombinedOutput waits up to gradlePipeDrainDelay for orphaned children
+// to release the output pipe before giving up.
 func (r *CoverageRunner) runGradle(projectPath, command string, task *gradleTask) error {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
@@ -154,10 +177,16 @@ func (r *CoverageRunner) runGradle(projectPath, command string, task *gradleTask
 	// A killed Gradle can leave children (the JVM/daemon) holding our stdout
 	// pipe; without a WaitDelay, CombinedOutput would block until they exit,
 	// making the timeout error arrive arbitrarily late.
-	cmd.WaitDelay = 2 * time.Second
+	cmd.WaitDelay = gradlePipeDrainDelay
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil {
+			// The Gradle process itself exited successfully; only an orphaned
+			// child (e.g. the Gradle daemon) held our pipe past the drain delay.
+			// Output may be truncated, but we only need the report files.
+			return nil
+		}
 		if ctx.Err() == context.DeadlineExceeded {
 			return fmt.Errorf("gradle %s timed out after %s", task.name, r.timeout)
 		}
@@ -166,7 +195,10 @@ func (r *CoverageRunner) runGradle(projectPath, command string, task *gradleTask
 			return fmt.Errorf("gradle has no task %q — the coverage plugin was detected from a mention in the Gradle build files but may not actually be applied (e.g. a comment or dependency coordinate): %w\n%s",
 				task.name, err, outputTail(out))
 		}
-		return fmt.Errorf("gradle %s failed: %w\n%s", task.name, err, outputTail(out))
+		if tail := outputTail(out); tail != "" {
+			return fmt.Errorf("gradle %s failed: %w\n%s", task.name, err, tail)
+		}
+		return fmt.Errorf("gradle %s failed: %w", task.name, err)
 	}
 	return nil
 }
@@ -180,16 +212,12 @@ func outputTail(s string) string {
 	return "..." + s[len(s)-maxTail:]
 }
 
-// findReports globs the standard Kover and JaCoCo XML report locations for
-// the root project and first-level subprojects (multi-module builds).
-func findReports(projectPath string) []string {
-	patterns := []string{
-		filepath.Join("build", "reports", "kover", "report.xml"),
-		filepath.Join("*", "build", "reports", "kover", "report.xml"),
-		filepath.Join("build", "reports", "jacoco", "test", "jacocoTestReport.xml"),
-		filepath.Join("*", "build", "reports", "jacoco", "test", "jacocoTestReport.xml"),
-	}
-
+// findReports globs the given report-location patterns (relative to
+// projectPath) for the selected coverage tool only. Restricting the glob to
+// the tool that actually ran keeps a stale report left behind by the other
+// tool (e.g. a leftover jacocoTestReport.xml after migrating to Kover) from
+// silently blending into the results.
+func findReports(projectPath string, patterns []string) []string {
 	var reports []string
 	for _, pattern := range patterns {
 		matches, err := filepath.Glob(filepath.Join(projectPath, pattern))
