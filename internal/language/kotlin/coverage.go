@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -19,13 +20,29 @@ type gradleTask struct {
 }
 
 // detectGradleCommand locates the Gradle wrapper in the project root, or
-// falls back to a gradle binary on PATH.
+// falls back to a gradle binary on PATH. The returned path is always
+// absolute, so callers may exec it with cmd.Dir set to the project root
+// regardless of whether projectPath was relative.
 func detectGradleCommand(projectPath string) (string, error) {
-	for _, wrapper := range []string{"gradlew", "gradlew.bat"} {
-		path := filepath.Join(projectPath, wrapper)
-		if _, err := os.Stat(path); err == nil {
-			return path, nil
+	root, err := filepath.Abs(projectPath)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve project path %s: %w", projectPath, err)
+	}
+
+	wrappers := []string{"gradlew", "gradlew.bat"}
+	if runtime.GOOS == "windows" {
+		wrappers = []string{"gradlew.bat", "gradlew"}
+	}
+	for _, wrapper := range wrappers {
+		path := filepath.Join(root, wrapper)
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			continue
 		}
+		if runtime.GOOS != "windows" && info.Mode()&0o111 == 0 {
+			return "", fmt.Errorf("found %s but it is not executable; run: chmod +x %s", path, path)
+		}
+		return path, nil
 	}
 	if path, err := exec.LookPath("gradle"); err == nil {
 		return path, nil
@@ -49,12 +66,16 @@ func detectCoverageTask(projectPath string) (*gradleTask, error) {
 }
 
 // readGradleBuildFiles concatenates the root and first-level subproject
-// Gradle build/settings files. Missing files are simply skipped.
+// Gradle build/settings files, plus the version catalog (gradle/libs.versions.toml):
+// modern builds declare plugins there and apply them via
+// alias(libs.plugins.kover), so the plugin id never appears in the build
+// file itself. Missing files are simply skipped.
 func readGradleBuildFiles(projectPath string) string {
 	patterns := []string{
 		"build.gradle", "build.gradle.kts",
 		"settings.gradle", "settings.gradle.kts",
 		"*/build.gradle", "*/build.gradle.kts",
+		filepath.Join("gradle", "libs.versions.toml"),
 	}
 
 	var sb strings.Builder
