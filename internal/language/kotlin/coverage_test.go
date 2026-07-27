@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
@@ -340,4 +341,25 @@ func TestRunCoverage_TimeoutSurfaced(t *testing.T) {
 	_, err := runner.RunCoverage(dir, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "timed out")
+}
+
+func TestRunCoverage_FailureWithNoOutputHasCleanMessage(t *testing.T) {
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "build.gradle.kts"), `id("org.jetbrains.kotlinx.kover")`)
+	writeGradleFile(t, filepath.Join(dir, "gradlew"), "#!/bin/sh\nexit 1\n")
+	require.NoError(t, os.Chmod(filepath.Join(dir, "gradlew"), 0o755))
+
+	runner := NewCoverageRunner(60, &status.SilentReporter{})
+	_, err := runner.RunCoverage(dir, nil)
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "\n", "empty Gradle output must not leave a dangling newline")
+}
+
+func TestOutputTail_TruncatesLongOutput(t *testing.T) {
+	long := strings.Repeat("x", 3000)
+
+	tail := outputTail(long)
+
+	assert.Len(t, tail, 2003, "3-char ellipsis prefix plus 2000-char tail")
+	assert.True(t, strings.HasPrefix(tail, "..."))
 }
