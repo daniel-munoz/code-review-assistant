@@ -3,6 +3,7 @@ package kotlin
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/status"
@@ -131,6 +132,34 @@ func TestDetectGradleCommand_RelativeProjectPathYieldsAbsoluteWrapper(t *testing
 	cmd, err := detectGradleCommand(".")
 	require.NoError(t, err)
 	assert.True(t, filepath.IsAbs(cmd), "relative projectPath must still yield an absolute wrapper path")
+	assert.FileExists(t, cmd)
+}
+
+func TestDetectGradleCommand_FallsBackToPathGradle(t *testing.T) {
+	binDir := t.TempDir()
+	stub := filepath.Join(binDir, "gradle")
+	writeGradleFile(t, stub, "#!/bin/sh\n")
+	require.NoError(t, os.Chmod(stub, 0o755))
+	t.Setenv("PATH", binDir)
+
+	cmd, err := detectGradleCommand(t.TempDir()) // no wrapper in the project
+	require.NoError(t, err)
+	assert.Equal(t, stub, cmd)
+	assert.True(t, filepath.IsAbs(cmd))
+}
+
+func TestDetectGradleCommand_BatOnlyCheckoutFallsThroughOnUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-Windows behavior")
+	}
+	t.Setenv("PATH", t.TempDir()) // no gradle on PATH either
+
+	dir := t.TempDir()
+	writeGradleFile(t, filepath.Join(dir, "gradlew.bat"), "@echo off\r\n")
+
+	_, err := detectGradleCommand(dir)
+	require.Error(t, err, "a .bat wrapper is not executable on Unix; expect the no-Gradle error, not chmod advice")
+	assert.NotContains(t, err.Error(), "chmod")
 }
 
 func TestDetectGradleCommand_NonExecutableWrapperErrors(t *testing.T) {
