@@ -370,6 +370,10 @@ func TestHTMLReporter_Report_WithDependencies(t *testing.T) {
 	assert.Contains(t, output, "vis-network")
 	assert.Contains(t, output, "dependencyGraph")
 	assert.Contains(t, output, "Dependency Graph")
+
+	// Physics must be switched off once stabilization finishes, otherwise
+	// large graphs never settle and drift forever.
+	assert.Contains(t, output, "network.setOptions({ physics: false })")
 }
 
 func TestHTMLReporter_Report_ToFile(t *testing.T) {

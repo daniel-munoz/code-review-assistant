@@ -3,6 +3,7 @@ package reporter
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
@@ -334,10 +335,16 @@ func buildDependencyGraph(deps *analyzer.DependencyReport) *DependencyGraphData 
 	nodeMap := make(map[string]bool)
 	circularEdges := buildCircularEdgeSet(deps.CircularDependencies)
 
-	// Create nodes for all packages
+	// Create nodes for all packages first, so edges can resolve their
+	// targets against the complete set of declared packages
+	packageNames := make(map[string]bool)
 	for _, pkg := range deps.Packages {
 		addPackageNode(graph, &nodeMap, pkg)
-		addDependencyEdges(graph, &nodeMap, pkg, circularEdges)
+		packageNames[pkg.PackageName] = true
+	}
+
+	for _, pkg := range deps.Packages {
+		addDependencyEdges(graph, &nodeMap, pkg, packageNames, circularEdges)
 	}
 
 	return graph
@@ -384,10 +391,38 @@ func addPackageNode(graph *DependencyGraphData, nodeMap *map[string]bool, pkg *a
 }
 
 // addDependencyEdges creates edges for all internal dependencies of a package
-func addDependencyEdges(graph *DependencyGraphData, nodeMap *map[string]bool, pkg *analyzer.PackageDependencies, circularEdges map[string]bool) {
+func addDependencyEdges(graph *DependencyGraphData, nodeMap *map[string]bool, pkg *analyzer.PackageDependencies, packageNames map[string]bool, circularEdges map[string]bool) {
+	seen := make(map[string]bool)
 	for _, imp := range pkg.InternalImports {
-		ensureImportedNodeExists(graph, nodeMap, imp)
-		addEdge(graph, pkg.PackageName, imp, circularEdges)
+		to := resolveImportToPackage(imp, packageNames)
+		if to == pkg.PackageName || seen[to] {
+			continue
+		}
+		seen[to] = true
+		ensureImportedNodeExists(graph, nodeMap, to)
+		addEdge(graph, pkg.PackageName, to, circularEdges)
+	}
+}
+
+// resolveImportToPackage maps an internal import to the declared package it
+// belongs to. Go and JS imports are package paths and match directly; JVM
+// imports name a class inside a package (com.example.policy.PolicyMode,
+// possibly nested like ...Alpha.Companion), so dot-segments are stripped from
+// the right until a declared package matches. Cycle chains are expressed at
+// package level, so edges must be too for circular highlighting to apply.
+func resolveImportToPackage(imp string, packageNames map[string]bool) string {
+	if packageNames[imp] || strings.Contains(imp, "/") {
+		return imp
+	}
+	for c := strings.TrimSuffix(imp, ".*"); ; {
+		i := strings.LastIndex(c, ".")
+		if i < 0 {
+			return imp
+		}
+		c = c[:i]
+		if packageNames[c] {
+			return c
+		}
 	}
 }
 
