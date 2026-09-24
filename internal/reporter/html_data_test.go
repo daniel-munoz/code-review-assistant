@@ -392,6 +392,73 @@ func TestBuildDependencyGraph_CircularDepsHighlighted(t *testing.T) {
 	}
 }
 
+func TestBuildDependencyGraph_ClassImportsCollapseToPackageNodes(t *testing.T) {
+	// Kotlin-style: InternalImports are fully-qualified class names, while
+	// package names (and cycle chains) are dot-separated package names.
+	deps := &analyzer.DependencyReport{
+		Packages: []*analyzer.PackageDependencies{
+			{
+				PackageName:  "com.example.metrics",
+				TotalImports: 3,
+				InternalImports: []string{
+					"com.example.policy.PolicyMode",
+					"com.example.policy.PolicyStore",
+					"com.example.metrics.Recorder",
+				},
+			},
+			{
+				PackageName:     "com.example.policy",
+				TotalImports:    1,
+				InternalImports: []string{"com.example.metrics.Recorder"},
+			},
+		},
+	}
+
+	graph := buildDependencyGraph(deps)
+
+	require.NotNil(t, graph)
+	// Class imports resolve to their declared package: no class-level nodes.
+	assert.Len(t, graph.Nodes, 2)
+	// The two imports into com.example.policy collapse into one edge, and the
+	// same-package import (metrics.Recorder from metrics) adds no self-edge.
+	require.Len(t, graph.Edges, 2)
+	targets := map[string]string{}
+	for _, edge := range graph.Edges {
+		targets[edge.From] = edge.To
+	}
+	assert.Equal(t, "com.example.policy", targets["com.example.metrics"])
+	assert.Equal(t, "com.example.metrics", targets["com.example.policy"])
+}
+
+func TestBuildDependencyGraph_CircularDepsHighlightedWithClassImports(t *testing.T) {
+	deps := &analyzer.DependencyReport{
+		Packages: []*analyzer.PackageDependencies{
+			{
+				PackageName:     "com.example.metrics",
+				TotalImports:    1,
+				InternalImports: []string{"com.example.policy.PolicyMode"},
+			},
+			{
+				PackageName:     "com.example.policy",
+				TotalImports:    1,
+				InternalImports: []string{"com.example.metrics.Recorder"},
+			},
+		},
+		CircularDependencies: []*analyzer.CircularDependency{
+			{Cycle: []string{"com.example.metrics", "com.example.policy", "com.example.metrics"}},
+		},
+	}
+
+	graph := buildDependencyGraph(deps)
+
+	require.NotNil(t, graph)
+	require.Len(t, graph.Edges, 2)
+	for _, edge := range graph.Edges {
+		assert.Equal(t, "#ef4444", edge.Color)
+		assert.Equal(t, 3, edge.Width)
+	}
+}
+
 func TestBuildDependencyGraph_Nil(t *testing.T) {
 	graph := buildDependencyGraph(nil)
 	assert.Nil(t, graph)

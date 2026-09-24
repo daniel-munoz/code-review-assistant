@@ -252,8 +252,10 @@ const htmlTemplateScripts = `
 
             const network = new vis.Network(graphContainer, data, options);
 
-            // Fit the network after stabilization
+            // Freeze the layout and fit the network after stabilization;
+            // large graphs never settle on their own and drift forever
             network.once('stabilizationIterationsDone', function() {
+                network.setOptions({ physics: false });
                 network.fit({
                     animation: {
                         duration: 1000,
