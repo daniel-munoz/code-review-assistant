@@ -127,17 +127,17 @@ func (p *JavaScriptParser) parseDirectorySequential(rootPath string, excludePatt
 		}
 
 		if info.IsDir() {
-			if shouldExclude(path, rootPath, excludePatterns) {
+			if parser.ShouldExclude(path, rootPath, excludePatterns) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if !hasMatchingExtension(path, extensions) {
+		if !parser.HasMatchingExtension(path, extensions) {
 			return nil
 		}
 
-		if shouldExclude(path, rootPath, excludePatterns) {
+		if parser.ShouldExclude(path, rootPath, excludePatterns) {
 			return nil
 		}
 
@@ -182,17 +182,17 @@ func (p *JavaScriptParser) parseDirectoryParallel(rootPath string, excludePatter
 		}
 
 		if info.IsDir() {
-			if shouldExclude(path, rootPath, excludePatterns) {
+			if parser.ShouldExclude(path, rootPath, excludePatterns) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if !hasMatchingExtension(path, extensions) {
+		if !parser.HasMatchingExtension(path, extensions) {
 			return nil
 		}
 
-		if shouldExclude(path, rootPath, excludePatterns) {
+		if parser.ShouldExclude(path, rootPath, excludePatterns) {
 			return nil
 		}
 
@@ -655,84 +655,4 @@ func extractModuleName(path string) string {
 		}
 	}
 	return base
-}
-
-// shouldExclude checks if a path should be excluded based on patterns.
-func shouldExclude(path, rootPath string, patterns []string) bool {
-	relPath, err := filepath.Rel(rootPath, path)
-	if err != nil {
-		relPath = path
-	}
-	relPath = filepath.ToSlash(relPath)
-
-	for _, pattern := range patterns {
-		if matchPattern(relPath, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
-// hasMatchingExtension checks if a path has one of the specified extensions.
-func hasMatchingExtension(path string, extensions []string) bool {
-	for _, ext := range extensions {
-		if strings.HasSuffix(path, ext) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchPattern performs glob-style pattern matching.
-func matchPattern(path, pattern string) bool {
-	pattern = filepath.ToSlash(pattern)
-
-	if strings.Contains(pattern, "**") {
-		return matchDoubleStarPattern(path, pattern)
-	}
-
-	matched, _ := filepath.Match(pattern, path)
-	if matched {
-		return true
-	}
-	matched, _ = filepath.Match(pattern, filepath.Base(path))
-	return matched
-}
-
-// matchDoubleStarPattern handles ** glob patterns.
-func matchDoubleStarPattern(path, pattern string) bool {
-	parts := strings.Split(pattern, "**")
-
-	// Handle patterns like "**/node_modules/**" (3 parts: "", "/node_modules/", "")
-	if len(parts) == 3 && parts[0] == "" && parts[2] == "" {
-		// Pattern is **/something/** - match if "something" appears anywhere in path
-		middle := strings.Trim(parts[1], "/")
-		if middle != "" {
-			// Check if the middle part appears as a path component
-			return strings.Contains(path, middle+"/") || strings.Contains(path, "/"+middle+"/") ||
-				strings.HasPrefix(path, middle+"/") || path == middle
-		}
-		return true
-	}
-
-	if len(parts) == 2 {
-		prefix := strings.Trim(parts[0], "/")
-		suffix := strings.Trim(parts[1], "/")
-
-		if prefix != "" && !strings.HasPrefix(path, prefix) {
-			return false
-		}
-
-		if suffix != "" {
-			if strings.Contains(suffix, "*") {
-				matched, _ := filepath.Match(suffix, filepath.Base(path))
-				return matched
-			}
-			return strings.HasSuffix(path, suffix) || strings.Contains(path, suffix+"/")
-		}
-
-		return true
-	}
-
-	return false
 }

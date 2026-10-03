@@ -258,34 +258,6 @@ func TestFunctionMetrics(t *testing.T) {
 	})
 }
 
-func TestPatternMatching(t *testing.T) {
-	testCases := []struct {
-		path     string
-		pattern  string
-		expected bool
-	}{
-		{"vendor/foo.go", "vendor/**", true},
-		{"pkg/vendor/foo.go", "vendor/**", false},
-		{"vendor/foo.go", "**/vendor/**", true},
-		{"pkg/vendor/foo.go", "**/vendor/**", true},
-		{"foo_test.go", "**/*_test.go", true},
-		{"pkg/foo_test.go", "**/*_test.go", true},
-		{"foo.go", "**/*_test.go", false},
-		{"testdata/sample.go", "**/testdata/**", true},
-		{"pkg/testdata/sample.go", "**/testdata/**", true},
-		{"foo.pb.go", "**/*.pb.go", true},
-		{"pkg/foo.pb.go", "**/*.pb.go", true},
-		{"foo.go", "**/*.pb.go", false},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.path+" vs "+tc.pattern, func(t *testing.T) {
-			result := matchPattern(tc.path, tc.pattern)
-			assert.Equal(t, tc.expected, result, "pattern match should be correct")
-		})
-	}
-}
-
 func TestComplexity(t *testing.T) {
 	parser := NewParser(1)
 

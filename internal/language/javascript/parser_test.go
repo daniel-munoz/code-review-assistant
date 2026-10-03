@@ -482,49 +482,6 @@ func TestExtensions(t *testing.T) {
 	}
 }
 
-func TestMatchDoubleStarPattern(t *testing.T) {
-	tests := []struct {
-		name    string
-		path    string
-		pattern string
-		want    bool
-	}{
-		// Basic patterns
-		{"vendor all", "vendor/pkg/file.go", "vendor/**", true},
-		{"vendor nested", "vendor/a/b/c/file.go", "vendor/**", true},
-		{"not vendor", "src/vendor/file.go", "vendor/**", false},
-
-		// node_modules pattern (the bug we're fixing)
-		{"node_modules root", "node_modules/react/index.js", "**/node_modules/**", true},
-		{"node_modules nested", "src/node_modules/lodash/index.js", "**/node_modules/**", true},
-		{"node_modules deep", "a/b/c/node_modules/pkg/file.js", "**/node_modules/**", true},
-		{"not node_modules", "src/modules/file.js", "**/node_modules/**", false},
-		{"node_modules exact", "node_modules", "**/node_modules/**", true},
-
-		// Other common patterns
-		{"pycache", "__pycache__/file.pyc", "**/__pycache__/**", true},
-		{"pycache nested", "src/__pycache__/module.pyc", "**/__pycache__/**", true},
-		{"dist folder", "dist/bundle.js", "**/dist/**", true},
-		{"build folder", "build/output.js", "**/build/**", true},
-
-		// File extension patterns
-		{"test file", "src/utils.test.ts", "**/*.test.ts", true},
-		{"spec file", "src/utils.spec.js", "**/*.spec.js", true},
-		{"not test", "src/utils.ts", "**/*.test.ts", false},
-
-		// testdata pattern
-		{"testdata", "testdata/sample.json", "**/testdata/**", true},
-		{"testdata nested", "pkg/testdata/fixtures/data.json", "**/testdata/**", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := matchPattern(tt.path, tt.pattern)
-			assert.Equal(t, tt.want, got, "matchPattern(%q, %q)", tt.path, tt.pattern)
-		})
-	}
-}
-
 // TestParseDirectory_ParallelVsSequential verifies that parallel parsing produces
 // the same results as sequential parsing (order-independent).
 func TestParseDirectory_ParallelVsSequential(t *testing.T) {
