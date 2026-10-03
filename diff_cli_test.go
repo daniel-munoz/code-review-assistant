@@ -22,6 +22,15 @@ var (
 	buildErr  error
 )
 
+// TestMain removes the binary built by craBinary once all tests have run.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if binPath != "" {
+		os.RemoveAll(filepath.Dir(binPath))
+	}
+	os.Exit(code)
+}
+
 // craBinary builds the CLI once per test run.
 func craBinary(tb testing.TB) string {
 	tb.Helper()
