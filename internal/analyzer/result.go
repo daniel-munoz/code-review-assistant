@@ -34,6 +34,16 @@ type AnalysisResult struct {
 	Issues         []*Issue          `json:"issues"`
 	Coverage       *CoverageReport   `json:"coverage,omitempty"`
 	Dependencies   *DependencyReport `json:"dependencies,omitempty"`
+	Scope          *Scope            `json:"scope,omitempty"` // Set only for diff-based runs
+}
+
+// Scope describes the subset of the project a diff-based run analyzed.
+// It's nil for full-project runs, so the field is absent from their JSON.
+type Scope struct {
+	Mode  string   `json:"mode"`           // "staged", "since" or "branch"
+	Ref   string   `json:"ref,omitempty"`  // Ref as given on the CLI (empty for staged)
+	Base  string   `json:"base,omitempty"` // Resolved commit compared against (since: ref, branch: merge-base)
+	Files []string `json:"files"`          // Analyzed files, same path form as issue "file" fields; [] when none
 }
 
 // AggregateMetrics contains statistical aggregations across all analyzed files.

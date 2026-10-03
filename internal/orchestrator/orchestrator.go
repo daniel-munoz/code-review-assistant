@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
@@ -42,6 +44,9 @@ type Orchestrator struct {
 	storage    storage.Storage        // Phase 3: Persistent storage (optional)
 	comparator *comparison.Comparator // Phase 3: Historical comparison (optional)
 	status     status.Reporter        // Live status reporting
+
+	stderr      io.Writer             // Warnings and notes (stdout carries only the report)
+	fullMetrics []*parser.FileMetrics // Diff mode with --with-deps: whole-project metrics for dependency analysis
 }
 
 // New creates a new Orchestrator with the given configuration.
@@ -72,57 +77,57 @@ func New(cfg *config.Config, targetPath string) (*Orchestrator, error) {
 		cfg.Analysis.ExcludePatterns = mergeExcludePatterns(cfg.Analysis.ExcludePatterns, langPatterns)
 	}
 
-	// Get language-specific components
-	p := lang.Parser(cfg.Analysis.Workers)
-	detectorRunner := lang.DetectorRunner(&cfg.Analysis)
-	coverageRunner := lang.CoverageRunner(&cfg.Analysis, statusReporter)
-
-	// Create dependency analyzer factory from language
-	depAnalyzerFactory := func(projectPath string) (analyzer.DependencyAnalyzer, error) {
-		return lang.DependencyAnalyzer(projectPath)
+	diff := cfg.Analysis.Diff
+	if diff.Enabled() {
+		// Coverage is whole-project: in diff mode it runs only on request.
+		cfg.Analysis.EnableCoverage = diff.WithCoverage
 	}
 
-	// Create analyzer with language-specific components
-	a := analyzer.NewAnalyzer(&cfg.Analysis, statusReporter, detectorRunner, coverageRunner, depAnalyzerFactory)
+	o := &Orchestrator{
+		config: cfg,
+		lang:   lang,
+		parser: lang.Parser(cfg.Analysis.Workers),
+		status: statusReporter,
+		stderr: os.Stderr,
+	}
+
+	detectorRunner := lang.DetectorRunner(&cfg.Analysis)
+	coverageRunner := lang.CoverageRunner(&cfg.Analysis, statusReporter)
+	o.analyzer = analyzer.NewAnalyzer(&cfg.Analysis, statusReporter, detectorRunner, coverageRunner, o.depFactory())
 
 	// Create reporter
 	r, err := reporter.NewReporter(&cfg.Output)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create reporter: %w", err)
 	}
+	o.reporter = r
+
+	// Diff runs are kept out of history: no storage, no comparison.
+	if diff.Enabled() {
+		return o, nil
+	}
 
 	// Phase 3: Create storage if enabled
-	var store storage.Storage
 	if cfg.Storage.Enabled {
-		store, err = createStorage(&cfg.Storage)
+		o.storage, err = createStorage(&cfg.Storage)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create storage: %w", err)
 		}
 	}
 
 	// Inject storage into HTMLReporter for historical trends
-	if store != nil {
+	if o.storage != nil {
 		if htmlReporter, ok := r.(*reporter.HTMLReporter); ok {
-			htmlReporter.WithStorage(store)
+			htmlReporter.WithStorage(o.storage)
 		}
 	}
 
 	// Phase 3: Create comparator if enabled
-	var comp *comparison.Comparator
 	if cfg.Comparison.Enabled {
-		comp = comparison.NewComparator(cfg.Comparison.StableThreshold)
+		o.comparator = comparison.NewComparator(cfg.Comparison.StableThreshold)
 	}
 
-	return &Orchestrator{
-		config:     cfg,
-		lang:       lang,
-		parser:     p,
-		analyzer:   a,
-		reporter:   r,
-		storage:    store,
-		comparator: comp,
-		status:     statusReporter,
-	}, nil
+	return o, nil
 }
 
 // getLanguage determines the language to use for analysis.
@@ -212,6 +217,10 @@ func createStorage(cfg *config.StorageConfig) (storage.Storage, error) {
 // Parse errors for individual files are reported as warnings but don't fail
 // the overall pipeline, allowing partial analysis when some files are malformed.
 func (o *Orchestrator) Run(targetPath string) error {
+	if o.config.Analysis.Diff.Enabled() {
+		return o.runDiff(targetPath)
+	}
+
 	ctx := context.Background()
 
 	// Start status reporting
@@ -283,16 +292,16 @@ func (o *Orchestrator) reportParseErrors(parseErrors []error) {
 		return
 	}
 
-	fmt.Printf("Warning: %d files failed to parse:\n", len(parseErrors))
+	fmt.Fprintf(o.errOut(), "Warning: %d files failed to parse:\n", len(parseErrors))
 	maxErrors := 5
 	for i, err := range parseErrors {
 		if i >= maxErrors {
-			fmt.Printf("  ... and %d more errors\n", len(parseErrors)-maxErrors)
+			fmt.Fprintf(o.errOut(), "  ... and %d more errors\n", len(parseErrors)-maxErrors)
 			break
 		}
-		fmt.Printf("  - %v\n", err)
+		fmt.Fprintf(o.errOut(), "  - %v\n", err)
 	}
-	fmt.Println()
+	fmt.Fprintln(o.errOut())
 }
 
 // runComparison runs comparison if enabled and previous report exists
@@ -310,7 +319,7 @@ func (o *Orchestrator) saveReportIfEnabled(ctx context.Context, targetPath strin
 	}
 
 	if err := o.saveReport(ctx, targetPath, result); err != nil {
-		fmt.Printf("Warning: failed to save report: %v\n", err)
+		fmt.Fprintf(o.errOut(), "Warning: failed to save report: %v\n", err)
 	}
 }
 
@@ -331,6 +340,15 @@ func (o *Orchestrator) saveReport(ctx context.Context, targetPath string, result
 
 	// Save to storage
 	return o.storage.Save(ctx, report)
+}
+
+// errOut returns where warnings and notes go: o.stderr if set (tests),
+// otherwise os.Stderr. stdout is reserved for the report.
+func (o *Orchestrator) errOut() io.Writer {
+	if o.stderr == nil {
+		return os.Stderr
+	}
+	return o.stderr
 }
 
 // Close cleans up resources used by the orchestrator.
