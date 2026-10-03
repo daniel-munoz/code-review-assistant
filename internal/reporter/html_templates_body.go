@@ -10,6 +10,12 @@ const htmlTemplateBody = `<body>
                     <span>📁 Project:</span>
                     <strong>{{.ProjectPath}}</strong>
                 </div>
+                {{if .Scope}}
+                <div class="meta-item">
+                    <span>🔍 Scope:</span>
+                    <strong>{{.Scope}}</strong>
+                </div>
+                {{end}}
                 <div class="meta-item">
                     <span>🕐 Analyzed:</span>
                     <strong>{{.Timestamp}}</strong>

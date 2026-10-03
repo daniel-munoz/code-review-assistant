@@ -65,6 +65,9 @@ func (cr *ConsoleReporter) Report(result *analyzer.AnalysisResult, comp *compari
 	fmt.Println(strings.Repeat("=", 60))
 	fmt.Println()
 	fmt.Printf("Project: %s\n", result.ProjectPath)
+	if scope := formatScope(result.Scope); scope != "" {
+		fmt.Printf("Scope: %s\n", scope)
+	}
 	fmt.Printf("Analyzed: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Println()
 

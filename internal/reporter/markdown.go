@@ -81,6 +81,9 @@ func (mr *MarkdownReporter) createOutputFile(path string) (*os.File, error) {
 func (mr *MarkdownReporter) writeHeader(result *analyzer.AnalysisResult) {
 	fmt.Fprintf(mr.output, "# Code Review Assistant - Analysis Report\n\n")
 	fmt.Fprintf(mr.output, "**Project:** %s  \n", result.ProjectPath)
+	if scope := formatScope(result.Scope); scope != "" {
+		fmt.Fprintf(mr.output, "**Scope:** %s  \n", scope)
+	}
 	fmt.Fprintf(mr.output, "**Analyzed:** %s  \n\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(mr.output, "---\n\n")
 }
