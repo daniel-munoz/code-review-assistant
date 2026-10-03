@@ -193,3 +193,38 @@ func TestSpecFlag(t *testing.T) {
 	assert.Equal(t, "--since", Spec{Mode: ModeSince}.Flag())
 	assert.Equal(t, "--branch", Spec{Mode: ModeBranch}.Flag())
 }
+
+// Git runs hooks in a linked worktree with GIT_DIR=<repo>/.git/worktrees/<name>
+// and no GIT_WORK_TREE. A subdirectory target must still see its staged files.
+func TestChangedFiles_HookEnvInLinkedWorktreeSubdir(t *testing.T) {
+	main := newRepo(t, map[string]string{"sub/a.go": "a"})
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitT(t, main, "worktree", "add", "-q", "-b", "feature", wt)
+	writeFile(t, wt, "sub/a.go", "a2")
+	gitT(t, wt, "add", "sub/a.go")
+	gitDir := gitT(t, wt, "rev-parse", "--absolute-git-dir")
+
+	t.Setenv("GIT_DIR", gitDir)
+	cs, err := ChangedFiles(filepath.Join(wt, "sub"), Spec{Mode: ModeStaged})
+	require.NoError(t, err)
+	assert.Equal(t, paths("a.go"), cs.Files)
+}
+
+// `git commit -a` / `git commit <path>` run hooks against a temporary index
+// named by GIT_INDEX_FILE, which may be relative to the hook's working directory.
+func TestChangedFiles_RelativeIndexFileWithSubdirTarget(t *testing.T) {
+	dir := newRepo(t, map[string]string{"sub/a.go": "a", "sub/b.go": "b"})
+	gitT(t, dir, "read-tree", "--index-output=.git/alt-index", "HEAD")
+	writeFile(t, dir, "sub/b.go", "b2")
+	cmd := exec.Command("git", "add", "sub/b.go")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_INDEX_FILE=.git/alt-index")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", out)
+
+	t.Chdir(dir)
+	t.Setenv("GIT_INDEX_FILE", filepath.Join(".git", "alt-index"))
+	cs, err := ChangedFiles(filepath.Join(dir, "sub"), Spec{Mode: ModeStaged})
+	require.NoError(t, err)
+	assert.Equal(t, paths("b.go"), cs.Files)
+}

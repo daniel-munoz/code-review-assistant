@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -152,10 +153,38 @@ func intersect(a, b []string) []string {
 	return out
 }
 
+// gitEnv returns env for git subprocesses. Git runs hooks with GIT_DIR set
+// (in a linked worktree: <repo>/.git/worktrees/<name>) and GIT_WORK_TREE
+// unset; git then treats the command's directory as the work tree root, so
+// --relative paths from a subdirectory target come back wrong. When GIT_DIR
+// is set without GIT_WORK_TREE, drop it (and GIT_PREFIX) so git discovers
+// the repository from dir. GIT_INDEX_FILE is kept, so `git commit -a` hooks
+// still see their temporary index. An explicit GIT_DIR + GIT_WORK_TREE pair
+// is kept as is.
+func gitEnv(env []string) []string {
+	hasDir, hasWorkTree := false, false
+	for _, kv := range env {
+		hasDir = hasDir || strings.HasPrefix(kv, "GIT_DIR=")
+		hasWorkTree = hasWorkTree || strings.HasPrefix(kv, "GIT_WORK_TREE=")
+	}
+	if !hasDir || hasWorkTree {
+		return env
+	}
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "GIT_DIR=") || strings.HasPrefix(kv, "GIT_PREFIX=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
 // runGit runs git with args in dir and returns stdout.
 func runGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	cmd.Env = gitEnv(os.Environ())
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
