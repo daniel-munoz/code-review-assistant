@@ -322,6 +322,11 @@ func resetAnalyzeFlags() {
 	storageBackend = "file"
 	storagePath = ""
 	workerCount = -1
+	stagedFlag = false
+	sinceRef = ""
+	branchRef = ""
+	withCoverage = false
+	withDeps = false
 }
 
 func TestGetTargetPath(t *testing.T) {
@@ -648,4 +653,110 @@ func TestAddStorageOverrides(t *testing.T) {
 		assert.Equal(t, true, overrides["storage_enabled"])
 		assert.Equal(t, true, overrides["comparison_enabled"])
 	})
+}
+
+func TestDiffFlagsRegistered(t *testing.T) {
+	for _, name := range []string{"staged", "since", "branch", "with-coverage", "with-deps"} {
+		assert.NotNil(t, analyzeCmd.Flags().Lookup(name), "should have --%s flag", name)
+	}
+}
+
+func TestDiffMode(t *testing.T) {
+	resetAnalyzeFlags()
+	defer resetAnalyzeFlags()
+
+	mode, ref := diffMode()
+	assert.Equal(t, "", mode)
+	assert.Equal(t, "", ref)
+
+	stagedFlag = true
+	mode, ref = diffMode()
+	assert.Equal(t, "staged", mode)
+	assert.Equal(t, "", ref)
+
+	resetAnalyzeFlags()
+	sinceRef = "HEAD~1"
+	mode, ref = diffMode()
+	assert.Equal(t, "since", mode)
+	assert.Equal(t, "HEAD~1", ref)
+
+	resetAnalyzeFlags()
+	branchRef = "main"
+	mode, ref = diffMode()
+	assert.Equal(t, "branch", mode)
+	assert.Equal(t, "main", ref)
+}
+
+func newDiffTestCmd() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("since", "", "")
+	cmd.Flags().String("branch", "", "")
+	return cmd
+}
+
+func TestValidateDiffFlags(t *testing.T) {
+	t.Run("no diff flag is always valid", func(t *testing.T) {
+		resetAnalyzeFlags()
+		defer resetAnalyzeFlags()
+		saveReport = true
+		assert.NoError(t, validateDiffFlags(newDiffTestCmd()))
+	})
+
+	t.Run("save-report with staged is rejected", func(t *testing.T) {
+		resetAnalyzeFlags()
+		defer resetAnalyzeFlags()
+		stagedFlag = true
+		saveReport = true
+		err := validateDiffFlags(newDiffTestCmd())
+		require.Error(t, err)
+		assert.Equal(t, "--save-report cannot be combined with --staged: diff runs are kept out of history", err.Error())
+	})
+
+	t.Run("compare with branch is rejected", func(t *testing.T) {
+		resetAnalyzeFlags()
+		defer resetAnalyzeFlags()
+		branchRef = "main"
+		compareReport = true
+		err := validateDiffFlags(newDiffTestCmd())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--compare cannot be combined with --branch")
+	})
+
+	t.Run("empty --since value is rejected", func(t *testing.T) {
+		resetAnalyzeFlags()
+		defer resetAnalyzeFlags()
+		cmd := newDiffTestCmd()
+		require.NoError(t, cmd.Flags().Set("since", ""))
+		err := validateDiffFlags(cmd)
+		require.Error(t, err)
+		assert.Equal(t, "--since requires a ref (e.g. --since=HEAD~1)", err.Error())
+	})
+
+	t.Run("empty --branch value is rejected", func(t *testing.T) {
+		resetAnalyzeFlags()
+		defer resetAnalyzeFlags()
+		cmd := newDiffTestCmd()
+		require.NoError(t, cmd.Flags().Set("branch", ""))
+		err := validateDiffFlags(cmd)
+		require.Error(t, err)
+		assert.Equal(t, "--branch requires a base branch (e.g. --branch=main)", err.Error())
+	})
+}
+
+func TestAddDiffOverrides(t *testing.T) {
+	resetAnalyzeFlags()
+	defer resetAnalyzeFlags()
+
+	overrides := map[string]interface{}{}
+	addDiffOverrides(overrides)
+	assert.Empty(t, overrides, "no diff flag, no overrides")
+
+	branchRef = "main"
+	withCoverage = true
+	withDeps = true
+	addDiffOverrides(overrides)
+	assert.Equal(t, "branch", overrides["diff_mode"])
+	assert.Equal(t, "main", overrides["diff_ref"])
+	assert.Equal(t, true, overrides["diff_with_coverage"])
+	assert.Equal(t, true, overrides["diff_with_deps"])
 }

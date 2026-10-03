@@ -67,7 +67,22 @@ type AnalysisConfig struct {
 
 	// Parallel processing
 	Workers int `mapstructure:"workers"` // 0=auto (runtime.NumCPU), 1=sequential, N=parallel
+
+	// Diff-based analysis (CLI-only; never read from config files)
+	Diff DiffConfig `mapstructure:"-"`
 }
+
+// DiffConfig holds diff-based analysis settings. They come only from CLI
+// flags (--staged, --since, --branch, --with-coverage, --with-deps).
+type DiffConfig struct {
+	Mode         string // "", "staged", "since" or "branch"
+	Ref          string // Ref for "since" / "branch"
+	WithCoverage bool   // Run coverage in diff mode
+	WithDeps     bool   // Run dependency analysis (over the full project) in diff mode
+}
+
+// Enabled reports whether a diff mode was selected.
+func (d DiffConfig) Enabled() bool { return d.Mode != "" }
 
 // OutputConfig contains settings that control report formatting and output.
 //
@@ -296,6 +311,7 @@ func (c *Config) Merge(overrides map[string]interface{}) {
 	c.mergeCoverageSettings(overrides)
 	c.mergeDependencySettings(overrides)
 	c.mergeWorkerSettings(overrides)
+	c.mergeDiffSettings(overrides)
 	c.mergeOutputSettings(overrides)
 	c.mergeStorageSettings(overrides)
 	c.mergeComparisonSettings(overrides)
@@ -344,6 +360,14 @@ func (c *Config) mergeWorkerSettings(overrides map[string]interface{}) {
 	if val, ok := overrides["workers"].(int); ok && val >= 0 {
 		c.Analysis.Workers = val
 	}
+}
+
+// mergeDiffSettings merges diff-based analysis settings (CLI-only)
+func (c *Config) mergeDiffSettings(overrides map[string]interface{}) {
+	mergeStringIfNonEmpty(&c.Analysis.Diff.Mode, overrides, "diff_mode")
+	mergeStringIfNonEmpty(&c.Analysis.Diff.Ref, overrides, "diff_ref")
+	mergeBool(&c.Analysis.Diff.WithCoverage, overrides, "diff_with_coverage")
+	mergeBool(&c.Analysis.Diff.WithDeps, overrides, "diff_with_deps")
 }
 
 // mergeOutputSettings merges output configuration settings

@@ -412,3 +412,27 @@ func TestMerge_TypeSafety(t *testing.T) {
 		assert.False(t, cfg.Output.Verbose)
 	})
 }
+
+func TestMergeDiffSettings(t *testing.T) {
+	cfg := Default()
+	assert.False(t, cfg.Analysis.Diff.Enabled())
+
+	cfg.Merge(map[string]interface{}{
+		"diff_mode":          "branch",
+		"diff_ref":           "main",
+		"diff_with_coverage": true,
+		"diff_with_deps":     true,
+	})
+
+	assert.True(t, cfg.Analysis.Diff.Enabled())
+	assert.Equal(t, DiffConfig{Mode: "branch", Ref: "main", WithCoverage: true, WithDeps: true}, cfg.Analysis.Diff)
+}
+
+func TestDiffConfig_NotReadFromYAML(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("analysis:\n  diff:\n    mode: staged\n  Diff:\n    Mode: staged\n"), 0o644))
+
+	cfg, err := LoadConfig(path)
+	require.NoError(t, err)
+	assert.False(t, cfg.Analysis.Diff.Enabled(), "diff mode is CLI-only")
+}

@@ -39,6 +39,13 @@ var (
 
 	// Parallel processing flags
 	workerCount int
+
+	// Diff-based analysis flags
+	stagedFlag   bool
+	sinceRef     string
+	branchRef    string
+	withCoverage bool
+	withDeps     bool
 )
 
 // analyzeCmd represents the analyze command
@@ -60,7 +67,9 @@ Example usage:
   code-review-assistant analyze . --language javascript
   code-review-assistant analyze . --language kotlin
   code-review-assistant analyze . --large-file-threshold 1000
-  code-review-assistant analyze . --exclude "generated/**" --verbose`,
+  code-review-assistant analyze . --exclude "generated/**" --verbose
+  code-review-assistant analyze . --staged
+  code-review-assistant analyze . --branch=main --format json`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAnalyze,
 }
@@ -98,12 +107,23 @@ func init() {
 
 	// Parallel processing flags
 	analyzeCmd.Flags().IntVar(&workerCount, "workers", -1, "number of parallel workers (-1=use config, 0=auto, 1=sequential)")
+
+	// Diff-based analysis flags
+	analyzeCmd.Flags().BoolVar(&stagedFlag, "staged", false, "analyze only files staged for commit")
+	analyzeCmd.Flags().StringVar(&sinceRef, "since", "", "analyze only files changed since <ref> (commits and uncommitted edits)")
+	analyzeCmd.Flags().StringVar(&branchRef, "branch", "", "analyze only files changed since the merge-base with <base>")
+	analyzeCmd.Flags().BoolVar(&withCoverage, "with-coverage", false, "run coverage analysis in diff mode (whole project)")
+	analyzeCmd.Flags().BoolVar(&withDeps, "with-deps", false, "run dependency analysis in diff mode (parses the whole project)")
+	analyzeCmd.MarkFlagsMutuallyExclusive("staged", "since", "branch")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
 	// Determine and validate target path
 	targetPath = getTargetPath(args)
 	if err := validatePath(targetPath); err != nil {
+		return err
+	}
+	if err := validateDiffFlags(cmd); err != nil {
 		return err
 	}
 
@@ -155,6 +175,7 @@ func buildOverridesMap(cmd *cobra.Command) map[string]interface{} {
 	addDependencyOverrides(overrides, cmd)
 	addOutputOverrides(overrides)
 	addStorageOverrides(overrides, cmd)
+	addDiffOverrides(overrides)
 
 	return overrides
 }
@@ -253,6 +274,56 @@ func addStorageOverrides(overrides map[string]interface{}, cmd *cobra.Command) {
 	if storagePath != "" {
 		overrides["storage_path"] = storagePath
 	}
+}
+
+// diffMode returns the selected diff mode and its ref ("" when not in diff mode).
+func diffMode() (mode, ref string) {
+	switch {
+	case stagedFlag:
+		return "staged", ""
+	case sinceRef != "":
+		return "since", sinceRef
+	case branchRef != "":
+		return "branch", branchRef
+	}
+	return "", ""
+}
+
+// validateDiffFlags rejects diff-flag combinations cobra can't check itself:
+// an empty --since/--branch value, and history flags in diff mode.
+func validateDiffFlags(cmd *cobra.Command) error {
+	if cmd.Flags().Changed("since") && sinceRef == "" {
+		return fmt.Errorf("--since requires a ref (e.g. --since=HEAD~1)")
+	}
+	if cmd.Flags().Changed("branch") && branchRef == "" {
+		return fmt.Errorf("--branch requires a base branch (e.g. --branch=main)")
+	}
+
+	mode, _ := diffMode()
+	if mode == "" {
+		return nil
+	}
+	if saveReport {
+		return fmt.Errorf("--save-report cannot be combined with --%s: diff runs are kept out of history", mode)
+	}
+	if compareReport {
+		return fmt.Errorf("--compare cannot be combined with --%s: diff runs are kept out of history", mode)
+	}
+	return nil
+}
+
+// addDiffOverrides adds diff-based analysis overrides
+func addDiffOverrides(overrides map[string]interface{}) {
+	mode, ref := diffMode()
+	if mode == "" {
+		return
+	}
+	overrides["diff_mode"] = mode
+	if ref != "" {
+		overrides["diff_ref"] = ref
+	}
+	overrides["diff_with_coverage"] = withCoverage
+	overrides["diff_with_deps"] = withDeps
 }
 
 // executeAnalysis creates the orchestrator and runs the analysis
