@@ -164,6 +164,9 @@ code-review-assistant analyze . --format json --output-file report.json
 
 # Interactive HTML dashboard
 code-review-assistant analyze . --format html --output-file dashboard.html
+
+# SARIF for GitHub code scanning and reviewdog
+code-review-assistant analyze . --format sarif --output-file cra.sarif
 ```
 
 ### Historical Tracking
@@ -192,6 +195,49 @@ code-review-assistant analyze . --branch=main --format json
 - `--staged` analyzes the working-tree version of staged files and warns if a staged file also has unstaged changes.
 - Untracked files aren't included (git doesn't list them until they're added).
 - In CI, `--branch` needs the history back to the merge-base. With `actions/checkout`, set `fetch-depth: 0`.
+
+### PR Annotations with SARIF
+
+`--format sarif` writes a [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) report that GitHub code scanning and [reviewdog](https://github.com/reviewdog/reviewdog) turn into inline pull request annotations.
+
+- One rule per check, with stable IDs: `too-many-parameters`, `high-complexity`, `long-function`, `deep-nesting`, `too-many-returns`, `magic-number`, `duplicate-error-handling`, `large-file`, `non-null-assertion`, `run-blocking`.
+- Severities map to SARIF levels: `error` → `error`, `warning` → `warning`, `info` → `note`. File-level findings (such as `large-file`) point at line 1.
+- Paths are relative to the git repository root, so annotations land on the right lines even when you analyze a subdirectory.
+- Project-level findings (low coverage, too many imports or external dependencies, circular dependencies, low comment ratio) have no file location, so they are **not** included in SARIF. Use another format to see them.
+
+GitHub Actions workflow (this repository runs the same one in `.github/workflows/cra.yml`):
+
+```yaml
+name: CRA
+on:
+  pull_request:
+    branches: [ "main" ]
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-go@v6
+      with:
+        go-version: stable
+    - run: go install github.com/daniel-munoz/code-review-assistant@latest
+    - run: code-review-assistant analyze . --branch=origin/${{ github.base_ref }} --format sarif -o cra.sarif --quiet
+    - uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: cra.sarif
+        category: cra
+```
+
+With reviewdog (other platforms, or local runs):
+
+```bash
+code-review-assistant analyze . --branch=main --format sarif --quiet | reviewdog -f=sarif -reporter=local
+```
 
 ## Language-Specific Features
 
@@ -380,7 +426,7 @@ code-review-assistant analyze [path] [flags]
 - `--complexity-threshold` - Override cyclomatic complexity threshold (default: 10)
 
 **Output & Storage Flags:**
-- `--format, -f` - Output format: console, markdown, json, html (default: console)
+- `--format, -f` - Output format: console, markdown, json, html, sarif (default: console)
 - `--output-file, -o` - Write output to file instead of stdout
 - `--json-pretty` - Pretty-print JSON output (default: true)
 - `--save-report` - Save report to storage for historical tracking
