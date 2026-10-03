@@ -173,6 +173,26 @@ code-review-assistant analyze . --format html --output-file dashboard.html
 code-review-assistant analyze . --save-report --compare
 ```
 
+### Diff Mode: Analyze Only What Changed
+
+```bash
+# Files staged for commit (pre-commit hook)
+code-review-assistant analyze . --staged
+
+# Files changed since a ref (its commits plus your uncommitted edits)
+code-review-assistant analyze . --since=HEAD~1
+
+# Files changed on this branch since it diverged from main (PRs / CI)
+code-review-assistant analyze . --branch=main --format json
+```
+
+- Only changed files that the language analyzes (matching extension, not excluded) are parsed, and only their issues are reported. JSON output includes a `scope` object (`mode`, `ref`, `base`, `files`).
+- Coverage and dependency analysis are project-wide, so they're skipped in diff mode. Add `--with-coverage` or `--with-deps` to include them (`--with-deps` parses the whole project).
+- Diff runs are never saved or compared: `--save-report` and `--compare` can't be combined with a diff flag.
+- `--staged` analyzes the working-tree version of staged files and warns if a staged file also has unstaged changes.
+- Untracked files aren't included (git doesn't list them until they're added).
+- In CI, `--branch` needs the history back to the merge-base. With `actions/checkout`, set `fetch-depth: 0`.
+
 ## Language-Specific Features
 
 ### Go
@@ -280,7 +300,10 @@ Create a `config.yaml` file in your project root or `~/.cra/config.yaml` for glo
 language: "auto"
 
 analysis:
-  # File patterns to exclude (merged with language defaults)
+  # File patterns to exclude (merged with language defaults).
+  # Matched per path segment: ** spans any number of directories, a pattern
+  # without "/" matches at any depth ("generated"), and a pattern with "/" is
+  # anchored at the project root ("generated/**").
   exclude_patterns:
     - "generated/**"
 
@@ -345,6 +368,11 @@ code-review-assistant analyze [path] [flags]
 - `--verbose, -v` - Show verbose output with per-file and per-package details
 - `--exclude` - Additional exclude patterns (can be repeated)
 - `--quiet, -q` - Disable live status reporting
+- `--staged` - Analyze only files staged for commit
+- `--since` - Analyze only files changed since a ref (e.g. `--since=HEAD~1`)
+- `--branch` - Analyze only files changed since the merge-base with a branch (e.g. `--branch=main`)
+- `--with-coverage` - Run coverage analysis in diff mode
+- `--with-deps` - Run dependency analysis in diff mode (parses the whole project)
 
 **Analysis Thresholds:**
 - `--large-file-threshold` - Override large file threshold in lines (default: 500)
