@@ -85,7 +85,7 @@ func init() {
 	analyzeCmd.Flags().IntVar(&largeFileThreshold, "large-file-threshold", 0, "override large file threshold (lines)")
 	analyzeCmd.Flags().IntVar(&longFunctionThreshold, "long-function-threshold", 0, "override long function threshold (lines)")
 	analyzeCmd.Flags().IntVar(&complexityThreshold, "complexity-threshold", 0, "override cyclomatic complexity threshold")
-	analyzeCmd.Flags().StringVarP(&outputFormat, "format", "f", "", "output format (console, markdown, json)")
+	analyzeCmd.Flags().StringVarP(&outputFormat, "format", "f", "", "output format (console, markdown, json, html, sarif)")
 	analyzeCmd.Flags().StringVarP(&outputFile, "output-file", "o", "", "write output to file (default: stdout)")
 	analyzeCmd.Flags().BoolVar(&jsonPretty, "json-pretty", true, "pretty-print JSON output")
 	analyzeCmd.Flags().BoolVar(&enableCoverage, "enable-coverage", true, "enable test coverage analysis")
@@ -162,6 +162,7 @@ func loadAndMergeConfig(cmd *cobra.Command) (*config.Config, error) {
 
 	overrides := buildOverridesMap(cmd)
 	cfg.Merge(overrides)
+	cfg.Output.ToolVersion = rootCmd.Version
 	return cfg, nil
 }
 

@@ -99,6 +99,9 @@ type OutputConfig struct {
 	JSONPretty bool   `mapstructure:"json_pretty"` // Phase 3: Pretty-print JSON
 	QuietMode  bool   `mapstructure:"quiet"`       // Disable live status reporting
 	ShowStatus bool   `mapstructure:"show_status"` // Force enable status reporting
+
+	// ToolVersion is the CLI version, set by cmd (never read from config files).
+	ToolVersion string `mapstructure:"-"`
 }
 
 // StorageConfig contains settings for persistent storage of analysis reports.

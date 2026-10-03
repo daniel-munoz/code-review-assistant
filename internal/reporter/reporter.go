@@ -53,7 +53,9 @@ func NewReporter(cfg *config.OutputConfig) (Reporter, error) {
 		return NewJSONReporter(cfg), nil
 	case "html":
 		return NewHTMLReporter(cfg), nil
+	case "sarif":
+		return NewSARIFReporter(cfg), nil
 	default:
-		return nil, fmt.Errorf("unsupported output format: %s (supported: console, markdown, json, html)", cfg.Format)
+		return nil, fmt.Errorf("unsupported output format: %s (supported: console, markdown, json, html, sarif)", cfg.Format)
 	}
 }

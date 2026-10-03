@@ -760,3 +760,19 @@ func TestAddDiffOverrides(t *testing.T) {
 	assert.Equal(t, true, overrides["diff_with_coverage"])
 	assert.Equal(t, true, overrides["diff_with_deps"])
 }
+
+func TestLoadAndMergeConfig_SetsToolVersion(t *testing.T) {
+	resetAnalyzeFlags()
+	defer resetAnalyzeFlags()
+	prev := GetConfigFile()
+	defer SetConfigFile(prev)
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("output:\n  format: sarif\n"), 0o644))
+	SetConfigFile(configPath)
+
+	cfg, err := loadAndMergeConfig(&cobra.Command{})
+	require.NoError(t, err)
+	assert.Equal(t, rootCmd.Version, cfg.Output.ToolVersion)
+	assert.NotEmpty(t, cfg.Output.ToolVersion)
+}
