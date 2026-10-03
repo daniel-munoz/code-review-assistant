@@ -1,10 +1,10 @@
 # Code Review Assistant
 
-![Version](https://img.shields.io/badge/version-1.4.0-blue)
+![Version](https://img.shields.io/badge/version-1.5.0-blue)
 ![Go Version](https://img.shields.io/badge/go-1.24%2B-00ADD8)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Status: Production Ready (v1.4)**
+**Status: Production Ready (v1.5)**
 
 A comprehensive CLI tool that analyzes codebases to provide actionable insights about code quality, complexity, maintainability, test coverage, and dependencies. Supports **multiple programming languages** with automatic language detection. Track your code quality metrics over time with historical comparison and multiple output formats.
 
@@ -101,7 +101,7 @@ Modular detector system identifies common code smells:
 Install the latest stable release:
 
 ```bash
-go install github.com/daniel-munoz/code-review-assistant@v1.4.0
+go install github.com/daniel-munoz/code-review-assistant@v1.5.0
 ```
 
 Or build from source:
