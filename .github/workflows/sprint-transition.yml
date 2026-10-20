@@ -1,0 +1,41 @@
+name: End of Sprint Transition
+
+on:
+  workflow_dispatch: # This creates the manual "Run workflow" button
+
+jobs:
+  sprint-cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write # Required to modify issue labels
+      pull-requests: write # Required if you use these labels on PRs as well
+
+    steps:
+      - name: Deploy Sprint Transitions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== 1. Processing Closed Issues ==="
+          echo "Removing 'current-sprint' from successfully closed issues..."
+          
+          # Fetch all closed issues with 'current-sprint' label
+          CLOSED_ISSUES=$(gh issue list --state closed --label "current-sprint" --json number --jq '.[].number')
+          
+          for num in $CLOSED_ISSUES; do
+            echo "Removing label from Issue #$num"
+            gh issue edit "$num" --remove-label "current-sprint"
+          done
+
+          echo "=== 2. Processing Next Sprint Issues ==="
+          echo "Swapping 'next-sprint' to 'current-sprint' on open issues..."
+          
+          # Fetch all open issues marked for the next sprint
+          NEXT_ISSUES=$(gh issue list --state open --label "next-sprint" --json number --jq '.[].number')
+          
+          for num in $NEXT_ISSUES; do
+            echo "Transitioning Issue #$num to current sprint"
+            gh issue edit "$num" --add-label "current-sprint" --remove-label "next-sprint"
+          done
+          
+          echo "Sprint transition completed successfully!"
+
