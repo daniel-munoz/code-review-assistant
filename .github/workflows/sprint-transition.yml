@@ -14,12 +14,13 @@ jobs:
       - name: Deploy Sprint Transitions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }} # No checkout, so tell gh which repo to use
         run: |
           echo "=== 1. Processing Closed Issues ==="
           echo "Removing 'current-sprint' from successfully closed issues..."
           
           # Fetch all closed issues with 'current-sprint' label
-          CLOSED_ISSUES=$(gh issue list --state closed --label "current-sprint" --json number --jq '.[].number')
+          CLOSED_ISSUES=$(gh issue list --state closed --label "current-sprint" --limit 1000 --json number --jq '.[].number')
           
           for num in $CLOSED_ISSUES; do
             echo "Removing label from Issue #$num"
@@ -30,7 +31,7 @@ jobs:
           echo "Swapping 'next-sprint' to 'current-sprint' on open issues..."
           
           # Fetch all open issues marked for the next sprint
-          NEXT_ISSUES=$(gh issue list --state open --label "next-sprint" --json number --jq '.[].number')
+          NEXT_ISSUES=$(gh issue list --state open --label "next-sprint" --limit 1000 --json number --jq '.[].number')
           
           for num in $NEXT_ISSUES; do
             echo "Transitioning Issue #$num to current sprint"
