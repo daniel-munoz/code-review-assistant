@@ -45,8 +45,9 @@ type Orchestrator struct {
 	comparator *comparison.Comparator // Phase 3: Historical comparison (optional)
 	status     status.Reporter        // Live status reporting
 
-	stderr      io.Writer             // Warnings and notes (stdout carries only the report)
-	fullMetrics []*parser.FileMetrics // Diff mode with --with-deps: whole-project metrics for dependency analysis
+	stderr      io.Writer                // Warnings and notes (stdout carries only the report)
+	fullMetrics []*parser.FileMetrics    // Diff mode with --with-deps: whole-project metrics for dependency analysis
+	result      *analyzer.AnalysisResult // Result of the last successful analysis, for exit-code decisions
 }
 
 // New creates a new Orchestrator with the given configuration.
@@ -262,6 +263,7 @@ func (o *Orchestrator) Run(targetPath string) error {
 
 	// Stage 5: Generate report (clear status before output)
 	o.status.Clear()
+	o.result = result
 	if err := o.reporter.Report(result, comparisonResult); err != nil {
 		return fmt.Errorf("failed to generate report: %w", err)
 	}
@@ -355,6 +357,12 @@ func (o *Orchestrator) errOut() io.Writer {
 		return os.Stderr
 	}
 	return o.stderr
+}
+
+// Result returns the result of the last Run, or nil if no analysis has
+// completed. Callers use it to decide the exit status after the report is out.
+func (o *Orchestrator) Result() *analyzer.AnalysisResult {
+	return o.result
 }
 
 // Close cleans up resources used by the orchestrator.

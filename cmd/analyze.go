@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -47,6 +48,9 @@ var (
 	branchRef    string
 	withCoverage bool
 	withDeps     bool
+
+	// Exit status
+	failOn string
 )
 
 // analyzeCmd represents the analyze command
@@ -70,7 +74,11 @@ Example usage:
   code-review-assistant analyze . --large-file-threshold 1000
   code-review-assistant analyze . --exclude "generated/**" --verbose
   code-review-assistant analyze . --staged
-  code-review-assistant analyze . --branch=main --format json`,
+  code-review-assistant analyze . --branch=main --format json
+  code-review-assistant analyze . --branch=origin/main --fail-on=error
+
+Exit codes: 0 no issues at or above --fail-on (always 0 without it),
+1 worst such issue is a warning, 2 at least one error, 3 CRA failed.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAnalyze,
 }
@@ -119,6 +127,9 @@ func init() {
 	analyzeCmd.Flags().BoolVar(&withCoverage, "with-coverage", false, "run coverage analysis in diff mode (whole project)")
 	analyzeCmd.Flags().BoolVar(&withDeps, "with-deps", false, "run dependency analysis in diff mode (parses the whole project)")
 	analyzeCmd.MarkFlagsMutuallyExclusive("staged", "since", "branch")
+
+	// Exit status
+	analyzeCmd.Flags().StringVar(&failOn, "fail-on", "none", "exit non-zero when issues at or above this severity are found: none, warning, error")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
@@ -130,6 +141,9 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	if err := validateDiffFlags(cmd); err != nil {
 		return err
 	}
+	if err := validateFailOn(failOn); err != nil {
+		return err
+	}
 
 	// Load and configure
 	cfg, err := loadAndMergeConfig(cmd)
@@ -138,7 +152,13 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	// Execute analysis
-	return executeAnalysis(cfg, targetPath)
+	err = executeAnalysis(cfg, targetPath)
+	var exitErr *ExitError
+	if errors.As(err, &exitErr) {
+		// The report is out; a usage dump would only bury the reason.
+		cmd.SilenceUsage = true
+	}
+	return err
 }
 
 // getTargetPath determines the target path from command arguments
@@ -343,5 +363,5 @@ func executeAnalysis(cfg *config.Config, targetPath string) error {
 		return fmt.Errorf("analysis failed: %w", err)
 	}
 
-	return nil
+	return failOnCheck(orch.Result().Issues, failOn)
 }

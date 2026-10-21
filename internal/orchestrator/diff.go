@@ -33,8 +33,7 @@ func (o *Orchestrator) runDiff(targetPath string) error {
 	defer o.status.Stop()
 
 	if len(candidates) == 0 {
-		o.status.Clear()
-		return o.reporter.Report(o.emptyResult(targetPath, scope), nil)
+		return o.report(o.emptyResult(targetPath, scope))
 	}
 
 	o.status.Update(fmt.Sprintf("[PARSE] Parsing %d changed %s files...", len(candidates), o.lang.DisplayName()))
@@ -47,8 +46,7 @@ func (o *Orchestrator) runDiff(targetPath string) error {
 	sort.Strings(scope.Files)
 
 	if len(changed) == 0 {
-		o.status.Clear()
-		return o.reporter.Report(o.emptyResult(targetPath, scope), nil)
+		return o.report(o.emptyResult(targetPath, scope))
 	}
 
 	result, err := o.analyzer.Analyze(targetPath, changed)
@@ -58,11 +56,17 @@ func (o *Orchestrator) runDiff(targetPath string) error {
 	result.Scope = scope
 	result.Preset = o.config.Preset
 
-	o.status.Clear()
-	if err := o.reporter.Report(result, nil); err != nil {
+	if err := o.report(result); err != nil {
 		return fmt.Errorf("failed to generate report: %w", err)
 	}
 	return nil
+}
+
+// report clears the status line, records result for Result, and writes it.
+func (o *Orchestrator) report(result *analyzer.AnalysisResult) error {
+	o.status.Clear()
+	o.result = result
+	return o.reporter.Report(result, nil)
 }
 
 // filterChanged joins git's target-relative paths onto targetPath (the same
