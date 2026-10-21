@@ -327,6 +327,7 @@ func resetAnalyzeFlags() {
 	branchRef = ""
 	withCoverage = false
 	withDeps = false
+	presetFlag = ""
 }
 
 func TestGetTargetPath(t *testing.T) {
@@ -775,4 +776,41 @@ func TestLoadAndMergeConfig_SetsToolVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, rootCmd.Version, cfg.Output.ToolVersion)
 	assert.NotEmpty(t, cfg.Output.ToolVersion)
+}
+
+// useEmptyConfig points the config loader at an empty temp file so no user
+// config or CRA_PRESET leaks into the test.
+func useEmptyConfig(t *testing.T) {
+	t.Helper()
+	t.Setenv("CRA_PRESET", "")
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, nil, 0o644))
+	SetConfigFile(path)
+	t.Cleanup(func() { SetConfigFile("") })
+}
+
+func TestLoadAndMergeConfig_Preset(t *testing.T) {
+	resetAnalyzeFlags()
+	t.Cleanup(resetAnalyzeFlags)
+	useEmptyConfig(t)
+	presetFlag = "strict"
+	complexityThreshold = 15
+
+	cfg, err := loadAndMergeConfig(analyzeCmd)
+	require.NoError(t, err)
+
+	assert.Equal(t, 15, cfg.Analysis.ComplexityThreshold, "CLI flag beats preset")
+	assert.Equal(t, 4, cfg.Analysis.MaxParameters, "strict preset applied")
+	assert.Equal(t, "strict", cfg.Preset)
+}
+
+func TestLoadAndMergeConfig_UnknownPreset(t *testing.T) {
+	resetAnalyzeFlags()
+	t.Cleanup(resetAnalyzeFlags)
+	useEmptyConfig(t)
+	presetFlag = "nope"
+
+	_, err := loadAndMergeConfig(analyzeCmd)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown preset")
 }

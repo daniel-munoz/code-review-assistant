@@ -13,6 +13,7 @@ var (
 	// Flags for analyze command
 	targetPath              string
 	languageFlag            string // Language to analyze
+	presetFlag              string // Preset name or path
 	excludePatterns         []string
 	largeFileThreshold      int
 	longFunctionThreshold   int
@@ -79,6 +80,9 @@ func init() {
 
 	// Language flag
 	analyzeCmd.Flags().StringVarP(&languageFlag, "language", "l", "auto", "language to analyze (auto, go, python, javascript, kotlin)")
+
+	// Preset flag
+	analyzeCmd.Flags().StringVar(&presetFlag, "preset", "", "analysis preset: strict, standard, relaxed, or path to a preset YAML file")
 
 	// Local flags specific to analyze command
 	analyzeCmd.Flags().StringSliceVar(&excludePatterns, "exclude", []string{}, "additional exclude patterns (can be repeated)")
@@ -155,7 +159,7 @@ func validatePath(path string) error {
 
 // loadAndMergeConfig loads configuration and applies CLI flag overrides
 func loadAndMergeConfig(cmd *cobra.Command) (*config.Config, error) {
-	cfg, err := config.LoadConfig(GetConfigFile())
+	cfg, err := config.LoadConfigWithPreset(GetConfigFile(), presetFlag)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
