@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/daniel-munoz/code-review-assistant/internal/comparison"
 	"github.com/daniel-munoz/code-review-assistant/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,4 +79,40 @@ func TestConsole_ShowsPreset(t *testing.T) {
 	res.Preset = ""
 	out = captureStdout(t, func() { require.NoError(t, r.Report(res, nil)) })
 	assert.NotContains(t, out, "Preset")
+}
+
+// presetComparison compares two empty results that used the given presets.
+func presetComparison(prev, cur string) *comparison.ComparisonResult {
+	previous, current := emptyDiffResult(), emptyDiffResult()
+	previous.Preset, current.Preset = prev, cur
+	return comparison.NewComparator(5).Compare(current, previous, time.Now())
+}
+
+func TestComparisonSummary_NotesPresetMismatch(t *testing.T) {
+	const note = "different presets (relaxed → strict)"
+
+	t.Run("console", func(t *testing.T) {
+		r := NewConsoleReporter(&config.OutputConfig{Format: "console"})
+		comp := presetComparison("relaxed", "strict")
+		out := captureStdout(t, func() { require.NoError(t, r.Report(comp.Current, comp)) })
+		assert.Contains(t, out, note)
+
+		comp = presetComparison("strict", "strict")
+		out = captureStdout(t, func() { require.NoError(t, r.Report(comp.Current, comp)) })
+		assert.NotContains(t, out, "different presets")
+	})
+
+	t.Run("markdown", func(t *testing.T) {
+		render := func(comp *comparison.ComparisonResult) string {
+			out := filepath.Join(t.TempDir(), "report.md")
+			r, err := NewReporter(&config.OutputConfig{Format: "markdown", OutputFile: out})
+			require.NoError(t, err)
+			require.NoError(t, r.Report(comp.Current, comp))
+			data, err := os.ReadFile(out)
+			require.NoError(t, err)
+			return string(data)
+		}
+		assert.Contains(t, render(presetComparison("relaxed", "strict")), note)
+		assert.NotContains(t, render(presetComparison("strict", "strict")), "different presets")
+	})
 }

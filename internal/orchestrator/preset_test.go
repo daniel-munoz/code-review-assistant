@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -59,4 +60,43 @@ func TestDiffRun_NoChangedFiles_SetsPreset(t *testing.T) {
 
 	assert.Equal(t, 0, run.result.TotalFiles)
 	assert.Equal(t, "strict", run.result.Preset)
+}
+
+// runStored runs a full analysis with file storage in storeDir, comparing
+// against the previous stored run, and returns captured stderr.
+func runStored(t *testing.T, storeDir, preset string) string {
+	t.Helper()
+	cfg := config.Default()
+	cfg.Preset = preset
+	cfg.Output.Format = "json"
+	cfg.Output.OutputFile = filepath.Join(t.TempDir(), "report.json")
+	cfg.Output.QuietMode = true
+	cfg.Analysis.EnableCoverage = false
+	cfg.Storage = config.StorageConfig{Enabled: true, Backend: "file", Path: storeDir, AutoSave: true}
+	cfg.Comparison = config.ComparisonConfig{Enabled: true, AutoCompare: true, StableThreshold: 5}
+	target := filepath.Join("..", "..", "testdata", "sample")
+
+	orch, err := New(cfg, target)
+	require.NoError(t, err)
+	defer orch.Close()
+	var stderr bytes.Buffer
+	orch.stderr = &stderr
+	require.NoError(t, orch.Run(target))
+	return stderr.String()
+}
+
+func TestRun_WarnsOnPresetMismatch(t *testing.T) {
+	const warning = "Warning: comparing runs with different presets (relaxed → strict); deltas include rule changes"
+
+	t.Run("different presets", func(t *testing.T) {
+		store := t.TempDir()
+		runStored(t, store, "relaxed")
+		assert.Contains(t, runStored(t, store, "strict"), warning)
+	})
+
+	t.Run("same preset", func(t *testing.T) {
+		store := t.TempDir()
+		runStored(t, store, "strict")
+		assert.NotContains(t, runStored(t, store, "strict"), "different presets")
+	})
 }

@@ -1,6 +1,7 @@
 package comparison
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/analyzer"
@@ -262,6 +263,30 @@ type ComparisonResult struct {
 	Trends            *Trends
 	NewIssues         []*analyzer.Issue
 	FixedIssues       []*analyzer.Issue
+}
+
+// PresetMismatch reports the presets of the previous and current runs (an
+// empty preset is shown as "none") and whether they differ.
+func (r *ComparisonResult) PresetMismatch() (previous, current string, mismatch bool) {
+	previous, current = presetOrNone(r.Previous), presetOrNone(r.Current)
+	return previous, current, previous != current
+}
+
+// PresetMismatchNote explains a preset mismatch, or returns "" when the two
+// runs used the same preset.
+func (r *ComparisonResult) PresetMismatchNote() string {
+	previous, current, mismatch := r.PresetMismatch()
+	if !mismatch {
+		return ""
+	}
+	return fmt.Sprintf("comparing runs with different presets (%s → %s); deltas include rule changes", previous, current)
+}
+
+func presetOrNone(result *analyzer.AnalysisResult) string {
+	if result == nil || result.Preset == "" {
+		return "none"
+	}
+	return result.Preset
 }
 
 // MetricDeltas contains the changes in metrics between two runs.

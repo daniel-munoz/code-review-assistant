@@ -313,6 +313,9 @@ func (cr *ConsoleReporter) printComparisonSummary(comp *comparison.ComparisonRes
 	fmt.Println("COMPARISON WITH PREVIOUS REPORT")
 	fmt.Println(strings.Repeat("-", 60))
 	fmt.Printf("Previous: %s\n", comp.PreviousTimestamp.Format("2006-01-02 15:04:05"))
+	if note := comp.PresetMismatchNote(); note != "" {
+		fmt.Printf("Note: %s\n", note)
+	}
 	fmt.Println()
 
 	// Trends summary

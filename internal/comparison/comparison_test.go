@@ -428,3 +428,29 @@ func createTestResult(files, lines, functions int) *analyzer.AnalysisResult {
 		Issues:         []*analyzer.Issue{},
 	}
 }
+
+func TestPresetMismatch(t *testing.T) {
+	tests := []struct {
+		prev, cur string
+		mismatch  bool
+		note      string
+	}{
+		{"relaxed", "strict", true, "relaxed → strict"},
+		{"", "strict", true, "none → strict"},
+		{"strict", "strict", false, ""},
+		{"", "", false, ""},
+	}
+	for _, tt := range tests {
+		r := &ComparisonResult{
+			Previous: &analyzer.AnalysisResult{Preset: tt.prev},
+			Current:  &analyzer.AnalysisResult{Preset: tt.cur},
+		}
+		_, _, mismatch := r.PresetMismatch()
+		assert.Equal(t, tt.mismatch, mismatch, "%q → %q", tt.prev, tt.cur)
+		if tt.note == "" {
+			assert.Empty(t, r.PresetMismatchNote())
+		} else {
+			assert.Contains(t, r.PresetMismatchNote(), tt.note)
+		}
+	}
+}

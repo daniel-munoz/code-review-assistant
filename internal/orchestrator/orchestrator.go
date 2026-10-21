@@ -254,6 +254,11 @@ func (o *Orchestrator) Run(targetPath string) error {
 		o.status.Update("[COMPARE] Comparing with previous report...")
 	}
 	comparisonResult := o.runComparison(result, previousReport, previousTimestamp)
+	if comparisonResult != nil {
+		if note := comparisonResult.PresetMismatchNote(); note != "" {
+			fmt.Fprintf(o.errOut(), "Warning: %s\n", note)
+		}
+	}
 
 	// Stage 5: Generate report (clear status before output)
 	o.status.Clear()

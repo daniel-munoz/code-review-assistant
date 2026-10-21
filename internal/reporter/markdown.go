@@ -343,6 +343,9 @@ func (mr *MarkdownReporter) writeFileDetails(files []*analyzer.FileAnalysis) {
 func (mr *MarkdownReporter) writeComparisonSummary(comp *comparison.ComparisonResult) {
 	fmt.Fprintf(mr.output, "## 📊 Comparison with Previous Report\n\n")
 	fmt.Fprintf(mr.output, "**Previous Report:** %s\n\n", comp.PreviousTimestamp.Format("2006-01-02 15:04:05"))
+	if note := comp.PresetMismatchNote(); note != "" {
+		fmt.Fprintf(mr.output, "> **Note:** %s\n\n", note)
+	}
 
 	// Trends
 	fmt.Fprintf(mr.output, "### Trends\n\n")
