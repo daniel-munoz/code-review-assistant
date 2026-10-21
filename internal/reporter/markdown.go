@@ -84,6 +84,9 @@ func (mr *MarkdownReporter) writeHeader(result *analyzer.AnalysisResult) {
 	if scope := formatScope(result.Scope); scope != "" {
 		fmt.Fprintf(mr.output, "**Scope:** %s  \n", scope)
 	}
+	if result.Preset != "" {
+		fmt.Fprintf(mr.output, "**Preset:** %s  \n", result.Preset)
+	}
 	fmt.Fprintf(mr.output, "**Analyzed:** %s  \n\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(mr.output, "---\n\n")
 }

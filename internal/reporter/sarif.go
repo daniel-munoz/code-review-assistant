@@ -51,8 +51,9 @@ type sarifLog struct {
 }
 
 type sarifRun struct {
-	Tool    sarifTool     `json:"tool"`
-	Results []sarifResult `json:"results"`
+	Tool       sarifTool         `json:"tool"`
+	Results    []sarifResult     `json:"results"`
+	Properties map[string]string `json:"properties,omitempty"`
 }
 
 type sarifTool struct {
@@ -169,18 +170,23 @@ func (sr *SARIFReporter) buildLog(result *analyzer.AnalysisResult) sarifLog {
 		})
 	}
 
+	run := sarifRun{
+		Tool: sarifTool{Driver: sarifDriver{
+			Name:           toolName,
+			Version:        sr.config.ToolVersion,
+			InformationURI: toolURI,
+			Rules:          sarifRules(extra),
+		}},
+		Results: results,
+	}
+	if result.Preset != "" {
+		run.Properties = map[string]string{"preset": result.Preset}
+	}
+
 	return sarifLog{
 		Schema:  sarifSchema,
 		Version: sarifVersion,
-		Runs: []sarifRun{{
-			Tool: sarifTool{Driver: sarifDriver{
-				Name:           toolName,
-				Version:        sr.config.ToolVersion,
-				InformationURI: toolURI,
-				Rules:          sarifRules(extra),
-			}},
-			Results: results,
-		}},
+		Runs:    []sarifRun{run},
 	}
 }
 

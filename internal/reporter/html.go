@@ -80,6 +80,7 @@ type TemplateData struct {
 	Timestamp   string
 	Duration    string
 	Scope       string
+	Preset      string
 
 	// Summary metrics
 	TotalFiles     int
@@ -126,6 +127,7 @@ func (hr *HTMLReporter) buildTemplateData(result *analyzer.AnalysisResult, comp 
 		ProjectPath:    result.ProjectPath,
 		ProjectName:    filepath.Base(result.ProjectPath),
 		Scope:          formatScope(result.Scope),
+		Preset:         result.Preset,
 		Timestamp:      time.Now().Format("2006-01-02 15:04:05"),
 		TotalFiles:     result.TotalFiles,
 		TotalLines:     result.TotalLines,

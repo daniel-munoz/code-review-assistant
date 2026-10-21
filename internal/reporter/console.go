@@ -68,6 +68,9 @@ func (cr *ConsoleReporter) Report(result *analyzer.AnalysisResult, comp *compari
 	if scope := formatScope(result.Scope); scope != "" {
 		fmt.Printf("Scope: %s\n", scope)
 	}
+	if result.Preset != "" {
+		fmt.Printf("Preset: %s\n", result.Preset)
+	}
 	fmt.Printf("Analyzed: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Println()
 

@@ -34,7 +34,8 @@ type AnalysisResult struct {
 	Issues         []*Issue          `json:"issues"`
 	Coverage       *CoverageReport   `json:"coverage,omitempty"`
 	Dependencies   *DependencyReport `json:"dependencies,omitempty"`
-	Scope          *Scope            `json:"scope,omitempty"` // Set only for diff-based runs
+	Scope          *Scope            `json:"scope,omitempty"`  // Set only for diff-based runs
+	Preset         string            `json:"preset,omitempty"` // Active preset label; empty when none
 }
 
 // Scope describes the subset of the project a diff-based run analyzed.

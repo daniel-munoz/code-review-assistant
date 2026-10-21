@@ -34,7 +34,9 @@ func (o *Orchestrator) runDiff(targetPath string) error {
 
 	if len(candidates) == 0 {
 		o.status.Clear()
-		return o.reporter.Report(emptyResult(targetPath, scope), nil)
+		empty := emptyResult(targetPath, scope)
+		empty.Preset = o.config.Preset
+		return o.reporter.Report(empty, nil)
 	}
 
 	o.status.Update(fmt.Sprintf("[PARSE] Parsing %d changed %s files...", len(candidates), o.lang.DisplayName()))
@@ -56,6 +58,7 @@ func (o *Orchestrator) runDiff(targetPath string) error {
 		return fmt.Errorf("analysis failed: %w", err)
 	}
 	result.Scope = scope
+	result.Preset = o.config.Preset
 
 	o.status.Clear()
 	if err := o.reporter.Report(result, nil); err != nil {

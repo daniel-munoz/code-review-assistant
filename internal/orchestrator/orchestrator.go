@@ -247,6 +247,7 @@ func (o *Orchestrator) Run(targetPath string) error {
 	if err != nil {
 		return fmt.Errorf("analysis failed: %w", err)
 	}
+	result.Preset = o.config.Preset
 
 	// Stage 4: Run comparison if enabled
 	if previousReport != nil {

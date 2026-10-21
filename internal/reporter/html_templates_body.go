@@ -16,6 +16,12 @@ const htmlTemplateBody = `<body>
                     <strong>{{.Scope}}</strong>
                 </div>
                 {{end}}
+                {{if .Preset}}
+                <div class="meta-item">
+                    <span>🎚️ Preset:</span>
+                    <strong>{{.Preset}}</strong>
+                </div>
+                {{end}}
                 <div class="meta-item">
                     <span>🕐 Analyzed:</span>
                     <strong>{{.Timestamp}}</strong>
