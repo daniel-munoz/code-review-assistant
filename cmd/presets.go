@@ -50,27 +50,23 @@ func runListPresets(cmd *cobra.Command, _ []string) error {
 }
 
 func runShowPreset(cmd *cobra.Command, args []string) error {
-	value := args[0]
-
-	var data []byte
-	if config.IsPresetPath(value) {
-		if _, err := config.LoadPreset(value, ""); err != nil {
-			return err
-		}
-		var err error
-		if data, err = os.ReadFile(value); err != nil {
-			return fmt.Errorf("failed to read preset %q: %w", value, err)
-		}
-	} else {
-		p, err := config.LoadPreset(value, "")
-		if err != nil {
-			return err
-		}
-		if data, err = config.BuiltinPresetYAML(p.Label); err != nil {
-			return err
-		}
+	data, err := presetYAML(args[0])
+	if err != nil {
+		return err
 	}
-
-	_, err := cmd.OutOrStdout().Write(data)
+	_, err = cmd.OutOrStdout().Write(data)
 	return err
+}
+
+// presetYAML validates a preset and returns its YAML: the embedded file for a
+// built-in, or the file's own contents for a path.
+func presetYAML(value string) ([]byte, error) {
+	p, err := config.LoadPreset(value, "")
+	if err != nil {
+		return nil, err
+	}
+	if config.IsPresetPath(value) {
+		return os.ReadFile(value)
+	}
+	return config.BuiltinPresetYAML(p.Label)
 }

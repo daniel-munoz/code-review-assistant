@@ -119,6 +119,42 @@ func (p *Preset) SetViperDefaults(v *viper.Viper) {
 	}
 }
 
+// readConfigAndPreset reads the config file into v. Without an explicit
+// preset, it also applies the file's "preset:" just above the defaults and
+// returns it.
+func readConfigAndPreset(v *viper.Viper, configPath, explicit string) (*Preset, error) {
+	if err := readConfigFile(v, configPath); err != nil {
+		return nil, err
+	}
+	if explicit != "" || !v.InConfig("preset") {
+		return nil, nil
+	}
+
+	preset, err := LoadPreset(v.GetString("preset"), filepath.Dir(v.ConfigFileUsed()))
+	if err == nil {
+		preset.SetViperDefaults(v)
+	}
+	return preset, err
+}
+
+// withPreset applies an explicit preset over cfg (above the config file and
+// env) and records the effective preset's label.
+func withPreset(cfg *Config, preset *Preset, explicit string) (*Config, error) {
+	if explicit != "" {
+		var err error
+		if preset, err = LoadPreset(explicit, ""); err != nil {
+			return nil, err
+		}
+		preset.ApplyTo(&cfg.Analysis)
+	}
+
+	cfg.Preset = ""
+	if preset != nil {
+		cfg.Preset = preset.Label
+	}
+	return cfg, nil
+}
+
 // IsPresetPath reports whether value names a preset file rather than a
 // built-in preset: it contains a path separator or has a YAML extension.
 func IsPresetPath(value string) bool {
@@ -143,12 +179,7 @@ func LoadPreset(value, baseDir string) (*Preset, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := parsePreset(data, name)
-	if err != nil {
-		return nil, err
-	}
-	p.Label = name
-	return p, nil
+	return parsePreset(data, name, name)
 }
 
 func loadPresetFile(value, baseDir string) (*Preset, error) {
@@ -160,18 +191,13 @@ func loadPresetFile(value, baseDir string) (*Preset, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read preset %q: %w", value, err)
 	}
-	p, err := parsePreset(data, path)
-	if err != nil {
-		return nil, err
-	}
-	p.Label = value
-	return p, nil
+	return parsePreset(data, path, value)
 }
 
 // parsePreset decodes preset YAML, rejecting any key a preset may not set.
-// source names the preset in error messages.
-func parsePreset(data []byte, source string) (*Preset, error) {
-	var p Preset
+// source names the preset in error messages; label becomes its Label.
+func parsePreset(data []byte, source, label string) (*Preset, error) {
+	p := Preset{Label: label}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&p); err != nil && !errors.Is(err, io.EOF) {

@@ -241,8 +241,23 @@ func LoadConfigWithPreset(configPath, explicitPreset string) (*Config, error) {
 	}
 
 	v := viper.New()
+	registerDefaults(v)
 
-	// Set defaults
+	preset, err := readConfigAndPreset(v, configPath, explicit)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("error parsing config: %w", err)
+	}
+
+	return withPreset(&cfg, preset, explicit)
+}
+
+// registerDefaults sets every config key's default in v.
+func registerDefaults(v *viper.Viper) {
 	defaults := Default()
 	v.SetDefault("language", defaults.Language)
 	v.SetDefault("analysis.exclude_patterns", defaults.Analysis.ExcludePatterns)
@@ -278,7 +293,11 @@ func LoadConfigWithPreset(configPath, explicitPreset string) (*Config, error) {
 	v.SetDefault("comparison.enabled", defaults.Comparison.Enabled)
 	v.SetDefault("comparison.auto_compare", defaults.Comparison.AutoCompare)
 	v.SetDefault("comparison.stable_threshold", defaults.Comparison.StableThreshold)
+}
 
+// readConfigFile enables CRA_* env vars and reads the config file, either
+// configPath or config.yaml from the current directory or ~/.cra.
+func readConfigFile(v *viper.Viper, configPath string) error {
 	// Environment variables
 	v.SetEnvPrefix("CRA") // Code Review Assistant
 	v.AutomaticEnv()
@@ -305,44 +324,11 @@ func LoadConfigWithPreset(configPath, explicitPreset string) (*Config, error) {
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			// Config file found but error reading it
-			return nil, fmt.Errorf("error reading config file: %w", err)
+			return fmt.Errorf("error reading config file: %w", err)
 		}
 		// Config file not found - use defaults, this is OK
 	}
-
-	// A config-file preset sits just above the defaults
-	var preset *Preset
-	if explicit == "" && v.InConfig("preset") {
-		var err error
-		preset, err = LoadPreset(v.GetString("preset"), filepath.Dir(v.ConfigFileUsed()))
-		if err != nil {
-			return nil, err
-		}
-		preset.SetViperDefaults(v)
-	}
-
-	// Unmarshal into Config struct
-	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("error parsing config: %w", err)
-	}
-
-	// An explicit preset overrides the config file and env
-	if explicit != "" {
-		var err error
-		preset, err = LoadPreset(explicit, "")
-		if err != nil {
-			return nil, err
-		}
-		preset.ApplyTo(&cfg.Analysis)
-	}
-
-	cfg.Preset = ""
-	if preset != nil {
-		cfg.Preset = preset.Label
-	}
-
-	return &cfg, nil
+	return nil
 }
 
 // Merge merges CLI flag overrides into the configuration.
