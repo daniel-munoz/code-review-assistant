@@ -1,0 +1,28 @@
+# Code Review Assistant - "relaxed" preset
+# Copy this file to start a custom preset: cra analyze --preset=./my-preset.yaml
+name: relaxed
+description: Lenient thresholds for legacy code; skips the noisiest detectors
+
+analysis:
+  # Size and complexity thresholds
+  large_file_threshold: 1000
+  long_function_threshold: 100
+  min_comment_ratio: 0.05
+  complexity_threshold: 20
+
+  # Anti-pattern detection
+  max_parameters: 7
+  max_nesting_depth: 6
+  max_return_statements: 5
+  detect_magic_numbers: false
+  detect_duplicate_errors: false
+  detect_non_null_assertions: true
+  detect_run_blocking: true
+
+  # Test coverage (whether coverage runs is not part of a preset)
+  min_coverage_threshold: 30
+
+  # Dependency analysis
+  max_imports: 15
+  max_external_dependencies: 15
+  detect_circular_deps: true

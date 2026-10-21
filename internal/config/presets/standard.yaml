@@ -1,0 +1,28 @@
+# Code Review Assistant - "standard" preset
+# Copy this file to start a custom preset: cra analyze --preset=./my-preset.yaml
+name: standard
+description: Default thresholds; same as running without a preset
+
+analysis:
+  # Size and complexity thresholds
+  large_file_threshold: 500
+  long_function_threshold: 50
+  min_comment_ratio: 0.15
+  complexity_threshold: 10
+
+  # Anti-pattern detection
+  max_parameters: 5
+  max_nesting_depth: 4
+  max_return_statements: 3
+  detect_magic_numbers: true
+  detect_duplicate_errors: true
+  detect_non_null_assertions: true
+  detect_run_blocking: true
+
+  # Test coverage (whether coverage runs is not part of a preset)
+  min_coverage_threshold: 50
+
+  # Dependency analysis
+  max_imports: 10
+  max_external_dependencies: 10
+  detect_circular_deps: true
