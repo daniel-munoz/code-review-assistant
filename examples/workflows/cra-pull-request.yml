@@ -1,0 +1,58 @@
+# Code Review Assistant on pull requests.
+#
+# Copy to .github/workflows/cra.yml in your repository. CRA analyzes only the
+# files the pull request changes, shows its findings as inline annotations
+# (GitHub code scanning), and fails the check when issues reach `fail-on`.
+
+name: CRA
+
+on:
+  pull_request:
+    branches: [ "main" ]   # base branches to review PRs against
+
+permissions:
+  contents: read
+  security-events: write   # upload-sarif; drop it if you set upload-sarif: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+    # A shallow checkout is fine: the action fetches the history it needs.
+    - uses: actions/checkout@v6
+
+    # @v1 follows the latest 1.x release. For reproducible runs, pin a release
+    # (@v1.6.0) or a commit SHA instead.
+    - uses: daniel-munoz/code-review-assistant@v1
+      with:
+        # Every input is optional. The values below are the defaults.
+
+        # Directory to analyze and its language (auto-detected from go.mod,
+        # package.json, pyproject.toml, build.gradle.kts, ...).
+        path: .
+        language: auto
+
+        # Thresholds: a built-in preset (strict, standard, relaxed), a path to
+        # your own preset YAML, and/or a config file. Config values override
+        # the preset. Leave both empty to use ./config.yaml or CRA defaults.
+        preset: ''
+        config: ''
+
+        # Block the merge on: none (annotate only), warning, or error.
+        # Only circular dependencies are errors, and dependency analysis is
+        # off in diff mode unless with-deps is true.
+        fail-on: error
+        with-deps: 'false'
+
+        # Diff against the PR base branch (empty) or a ref of your choice;
+        # full-scan: 'true' analyzes the whole project instead.
+        diff-base: ''
+        full-scan: 'false'
+
+        # Where results go: code scanning annotations and a JSON artifact
+        # (for later steps, such as an AI review, to read).
+        upload-sarif: 'true'
+        upload-report: 'true'
+
+        # Any other analyze flags, e.g. '--exclude generated/** --complexity-threshold 15'.
+        args: ''

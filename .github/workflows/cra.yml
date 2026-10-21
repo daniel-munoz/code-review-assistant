@@ -1,6 +1,7 @@
 # Runs Code Review Assistant on the files a pull request changes and uploads
 # the findings to GitHub code scanning, which shows them as inline PR
-# annotations. CRA is built from the PR's own code, so it reviews itself.
+# annotations. It uses the action from the PR's own checkout, so CRA and its
+# GitHub Action review themselves.
 
 name: CRA
 
@@ -17,25 +18,9 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
+    # Default shallow checkout on purpose: the action fetches the history
+    # --branch needs, and this exercises that path.
     - uses: actions/checkout@v6
-      with:
-        # --branch needs history back to the merge-base with the base branch
-        fetch-depth: 0
-
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: 'go.mod'
-        check-latest: true
-
-    - name: Build CRA
-      run: go build -o cra .
 
     - name: Analyze changed files
-      run: ./cra analyze . --branch=origin/${{ github.base_ref }} --format sarif -o cra.sarif --quiet
-
-    - name: Upload SARIF
-      uses: github/codeql-action/upload-sarif@v4
-      with:
-        sarif_file: cra.sarif
-        category: cra
+      uses: ./

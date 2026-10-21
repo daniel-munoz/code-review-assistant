@@ -1,0 +1,44 @@
+# Code Review Assistant on demand.
+#
+# Copy to .github/workflows/cra-manual.yml and run it from the Actions tab
+# ("Run workflow"), choosing what to analyze and how strict to be.
+
+name: CRA (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      diff-base:
+        description: Ref to diff against (e.g. origin/main, a tag or SHA). Empty analyzes the whole project.
+        default: ''
+      preset:
+        description: Preset
+        type: choice
+        options: [ standard, strict, relaxed ]
+        default: standard
+      fail-on:
+        description: Fail on
+        type: choice
+        options: [ none, warning, error ]
+        default: none
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    # @v1 follows the latest 1.x release. For reproducible runs, pin a release
+    # (@v1.6.0) or a commit SHA instead.
+    - uses: daniel-munoz/code-review-assistant@v1
+      with:
+        diff-base: ${{ inputs.diff-base }}
+        preset: ${{ inputs.preset }}
+        fail-on: ${{ inputs.fail-on }}
+        # Keep manual runs out of the default code scanning category so they
+        # don't replace the alerts from pull requests or scheduled runs.
+        sarif-category: cra-manual

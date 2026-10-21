@@ -1,0 +1,236 @@
+# Code Review Assistant as a reusable GitHub Action.
+#
+# Builds CRA from this action's own source, analyzes the files a pull request
+# changes (or the whole project outside pull requests), uploads the findings to
+# GitHub code scanning as inline PR annotations, keeps the JSON report as a
+# workflow artifact, and fails the job when issues reach the fail-on level.
+#
+# Usage and customization: README.md, "GitHub Action". Copy-ready workflows:
+# examples/workflows/.
+
+name: Code Review Assistant
+description: Diff-aware code quality analysis with SARIF annotations for pull requests
+author: Daniel Munoz
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  path:
+    description: Directory to analyze, relative to the workspace.
+    default: .
+  language:
+    description: Language to analyze (auto, go, python, javascript, kotlin). One language per run; use a matrix for polyglot repositories.
+    default: auto
+  preset:
+    description: Analysis preset (strict, standard, relaxed) or a path to a preset YAML file. Empty uses the config file or CRA defaults.
+    default: ''
+  config:
+    description: Path to a CRA config file. Empty uses ./config.yaml if present.
+    default: ''
+  diff-base:
+    description: Ref to diff against. Empty means origin/<PR base branch> on pull_request events and a full analysis otherwise.
+    default: ''
+  full-scan:
+    description: Analyze the whole project even on pull requests.
+    default: 'false'
+  with-deps:
+    description: Run dependency analysis (circular dependencies, import counts) in diff mode. Parses the whole project.
+    default: 'false'
+  fail-on:
+    description: Fail the job when issues at or above this severity are found (none, warning, error).
+    default: error
+  upload-sarif:
+    description: Upload findings to GitHub code scanning. Needs the security-events write permission.
+    default: 'true'
+  sarif-category:
+    description: Code scanning category. Must be unique per analysis in a workflow. Empty means "cra", or "cra-<language>" when language is set.
+    default: ''
+  upload-report:
+    description: Upload the JSON report as a workflow artifact.
+    default: 'true'
+  report-artifact:
+    description: Name of the JSON report artifact. Must be unique per run. Empty means "cra-report", or "cra-report-<language>" when language is set.
+    default: ''
+  setup-go:
+    description: Install Go to build CRA. Set to false if the job already set up Go 1.24 or newer.
+    default: 'true'
+  args:
+    description: Extra arguments passed to "analyze", split on whitespace (e.g. "--exclude generated/** --complexity-threshold 15").
+    default: ''
+
+outputs:
+  exit-code:
+    description: CRA exit code. 0 nothing at or above fail-on, 1 worst is a warning, 2 at least one error.
+    value: ${{ steps.analyze.outputs.exit-code }}
+  issues:
+    description: Total number of issues found.
+    value: ${{ steps.analyze.outputs.issues }}
+  errors:
+    description: Number of error-severity issues.
+    value: ${{ steps.analyze.outputs.errors }}
+  warnings:
+    description: Number of warning-severity issues.
+    value: ${{ steps.analyze.outputs.warnings }}
+  report-file:
+    description: Path to the JSON report.
+    value: ${{ steps.analyze.outputs.report-file }}
+  sarif-file:
+    description: Path to the SARIF report (empty when upload-sarif is false).
+    value: ${{ steps.analyze.outputs.sarif-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      if: inputs.setup-go == 'true'
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache-dependency-path: ${{ github.action_path }}/go.sum
+
+    - name: Build CRA
+      shell: bash
+      run: |
+        out="$RUNNER_TEMP/cra-action"
+        mkdir -p "$out"
+        go build -C "$GITHUB_ACTION_PATH" -o "$out/cra" .
+        echo "CRA_ACTION_DIR=$out" >> "$GITHUB_ENV"
+
+    - name: Resolve scope
+      id: scope
+      shell: bash
+      env:
+        INPUT_DIFF_BASE: ${{ inputs.diff-base }}
+        INPUT_FULL_SCAN: ${{ inputs.full-scan }}
+        INPUT_LANGUAGE: ${{ inputs.language }}
+        INPUT_SARIF_CATEGORY: ${{ inputs.sarif-category }}
+        INPUT_REPORT_ARTIFACT: ${{ inputs.report-artifact }}
+      run: |
+        base=""
+        if [ "$INPUT_FULL_SCAN" != "true" ]; then
+          if [ -n "$INPUT_DIFF_BASE" ]; then
+            base="$INPUT_DIFF_BASE"
+          elif [ -n "$GITHUB_BASE_REF" ]; then
+            base="origin/$GITHUB_BASE_REF"
+          fi
+        fi
+
+        # --branch needs history back to the merge-base. Make it work with the
+        # default shallow actions/checkout instead of requiring fetch-depth: 0.
+        if [ -n "$base" ]; then
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            echo "Shallow clone: fetching full history for the merge-base"
+            git fetch --quiet --unshallow --no-tags origin
+          fi
+          if [[ "$base" == origin/* ]] && ! git rev-parse --verify --quiet "$base" >/dev/null; then
+            branch="${base#origin/}"
+            git fetch --quiet --no-tags origin "+refs/heads/$branch:refs/remotes/origin/$branch"
+          fi
+          echo "Analyzing files changed since the merge-base with $base"
+        else
+          echo "Analyzing the whole project"
+        fi
+        echo "base=$base" >> "$GITHUB_OUTPUT"
+
+        suffix=""
+        if [ "$INPUT_LANGUAGE" != "auto" ]; then suffix="-$INPUT_LANGUAGE"; fi
+        echo "sarif-category=${INPUT_SARIF_CATEGORY:-cra$suffix}" >> "$GITHUB_OUTPUT"
+        echo "report-artifact=${INPUT_REPORT_ARTIFACT:-cra-report$suffix}" >> "$GITHUB_OUTPUT"
+
+    - name: Analyze
+      id: analyze
+      shell: bash
+      env:
+        BASE: ${{ steps.scope.outputs.base }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_LANGUAGE: ${{ inputs.language }}
+        INPUT_PRESET: ${{ inputs.preset }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_WITH_DEPS: ${{ inputs.with-deps }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
+        INPUT_ARGS: ${{ inputs.args }}
+      run: |
+        cra="$CRA_ACTION_DIR/cra"
+        report="$CRA_ACTION_DIR/report.json"
+        sarif="$CRA_ACTION_DIR/cra.sarif"
+
+        common=(analyze "$INPUT_PATH" --quiet --language "$INPUT_LANGUAGE")
+        [ -n "$INPUT_CONFIG" ] && common+=(--config "$INPUT_CONFIG")
+        [ -n "$INPUT_PRESET" ] && common+=(--preset "$INPUT_PRESET")
+        [ -n "$BASE" ] && common+=(--branch "$BASE")
+        read -r -a extra <<< "$INPUT_ARGS"
+        common+=("${extra[@]}")
+
+        # SARIF only carries file-level findings, so this run skips the
+        # project-wide coverage and dependency analysis. It never gates.
+        if [ "$INPUT_UPLOAD_SARIF" = "true" ]; then
+          sarif_only=()
+          [ -z "$BASE" ] && sarif_only+=(--enable-coverage=false)
+          "$cra" "${common[@]}" "${sarif_only[@]}" --format sarif -o "$sarif"
+          echo "sarif-file=$sarif" >> "$GITHUB_OUTPUT"
+        fi
+
+        full=()
+        [ -n "$BASE" ] && [ "$INPUT_WITH_DEPS" = "true" ] && full+=(--with-deps)
+        set +e
+        "$cra" "${common[@]}" "${full[@]}" --format json -o "$report" --fail-on "$INPUT_FAIL_ON"
+        code=$?
+        set -e
+        if [ "$code" -gt 2 ]; then
+          echo "::error::CRA failed with exit code $code"
+          exit "$code"
+        fi
+
+        count() { jq "[.result.issues[] | select(.severity == \"$1\")] | length" "$report"; }
+        issues=$(jq '.result.issues | length' "$report")
+        errors=$(count error)
+        warnings=$(count warning)
+        {
+          echo "exit-code=$code"
+          echo "issues=$issues"
+          echo "errors=$errors"
+          echo "warnings=$warnings"
+          echo "report-file=$report"
+        } >> "$GITHUB_OUTPUT"
+
+        {
+          echo "### Code Review Assistant"
+          echo
+          if [ -n "$BASE" ]; then
+            echo "Changed files since the merge-base with \`$BASE\`: $(jq '.result.scope.files | length' "$report")"
+          else
+            echo "Files analyzed: $(jq '.result.total_files' "$report")"
+          fi
+          echo
+          echo "| Errors | Warnings | Info |"
+          echo "|-------:|---------:|-----:|"
+          echo "| $errors | $warnings | $(count info) |"
+          echo
+          echo "Fail on: \`$INPUT_FAIL_ON\` (exit code $code)"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ steps.analyze.outputs.sarif-file }}
+        category: ${{ steps.scope.outputs.sarif-category }}
+
+    - name: Upload JSON report
+      if: inputs.upload-report == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.scope.outputs.report-artifact }}
+        path: ${{ steps.analyze.outputs.report-file }}
+
+    - name: Apply fail-on
+      if: steps.analyze.outputs.exit-code != '0'
+      shell: bash
+      env:
+        CODE: ${{ steps.analyze.outputs.exit-code }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        echo "::error::CRA found issues at or above fail-on=$INPUT_FAIL_ON (exit code $CODE). See the job summary and the code scanning annotations."
+        exit "$CODE"

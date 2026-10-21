@@ -1,0 +1,30 @@
+# Code Review Assistant on a schedule.
+#
+# Copy to .github/workflows/cra-scheduled.yml. Outside pull requests the action
+# analyzes the whole project, including coverage and dependency analysis, and
+# refreshes the code scanning alerts for the default branch.
+
+name: CRA (weekly)
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch:      # also allow running it by hand
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    # @v1 follows the latest 1.x release. For reproducible runs, pin a release
+    # (@v1.6.0) or a commit SHA instead.
+    - uses: daniel-munoz/code-review-assistant@v1
+      with:
+        # A whole-project scan reports what already exists, so don't fail the
+        # run on it; read the job summary, alerts and report artifact instead.
+        fail-on: none

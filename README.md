@@ -206,7 +206,22 @@ code-review-assistant analyze . --branch=main --format json
 - Paths are relative to the git repository root, so annotations land on the right lines even when you analyze a subdirectory.
 - Project-level findings (low coverage, too many imports or external dependencies, circular dependencies, low comment ratio) have no file location, so they are **not** included in SARIF. Use another format to see them.
 
-GitHub Actions workflow (this repository runs the same one in `.github/workflows/cra.yml`):
+On GitHub, the [GitHub Action](#github-action) runs CRA and uploads the SARIF for you. To wire it up by hand instead:
+
+```bash
+code-review-assistant analyze . --branch=origin/main --format sarif -o cra.sarif --quiet
+# then upload cra.sarif with github/codeql-action/upload-sarif
+```
+
+With reviewdog (other platforms, or local runs):
+
+```bash
+code-review-assistant analyze . --branch=main --format sarif --quiet | reviewdog -f=sarif -reporter=local
+```
+
+### GitHub Action
+
+The repository is also a GitHub Action. On pull requests it analyzes the changed files, shows findings as inline annotations through GitHub code scanning, writes a summary to the job page, keeps the JSON report as an artifact, and fails the check when issues reach `fail-on`.
 
 ```yaml
 name: CRA
@@ -221,24 +236,61 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+    - uses: daniel-munoz/code-review-assistant@v1
       with:
-        fetch-depth: 0
-    - uses: actions/setup-go@v6
-      with:
-        go-version: stable
-    - run: go install github.com/daniel-munoz/code-review-assistant@latest
-    - run: code-review-assistant analyze . --branch=origin/${{ github.base_ref }} --format sarif -o cra.sarif --quiet
-    - uses: github/codeql-action/upload-sarif@v4
-      with:
-        sarif_file: cra.sarif
-        category: cra
+        preset: standard
+        fail-on: warning
 ```
 
-With reviewdog (other platforms, or local runs):
+`@v1` follows the latest 1.x release: it moves with each release, so you get fixes without editing the workflow. For reproducible runs, pin an exact release (`@v1.6.0`) or a commit SHA. The action is available from v1.6.0.
 
-```bash
-code-review-assistant analyze . --branch=main --format sarif --quiet | reviewdog -f=sarif -reporter=local
-```
+Copy-ready workflows with every option explained are in [`examples/workflows/`](examples/workflows/):
+
+| File | Runs on | Notes |
+|------|---------|-------|
+| `cra-pull-request.yml` | `pull_request` | Changed files only; all inputs listed with their defaults |
+| `cra-scheduled.yml` | `schedule`, `workflow_dispatch` | Whole project, never fails the run |
+| `cra-manual.yml` | `workflow_dispatch` | Choose diff base, preset and fail-on when you run it |
+| `cra-polyglot.yml` | `pull_request` | Matrix with one job per language |
+
+**Inputs** (all optional):
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `path` | `.` | Directory to analyze |
+| `language` | `auto` | `go`, `python`, `javascript`, `kotlin`, or `auto`. One language per run |
+| `preset` | | `strict`, `standard`, `relaxed`, or a path to a preset YAML file |
+| `config` | | Path to a CRA config file (default: `./config.yaml` if present) |
+| `diff-base` | | Ref to diff against. Empty: `origin/<base branch>` on pull requests, whole project otherwise |
+| `full-scan` | `false` | Analyze the whole project even on pull requests |
+| `with-deps` | `false` | Dependency analysis in diff mode (parses the whole project) |
+| `fail-on` | `error` | `none`, `warning`, or `error` |
+| `upload-sarif` | `true` | Upload to code scanning (needs `security-events: write`) |
+| `sarif-category` | `cra` / `cra-<language>` | Code scanning category; must be unique per analysis |
+| `upload-report` | `true` | Upload the JSON report as an artifact |
+| `report-artifact` | `cra-report` / `cra-report-<language>` | Artifact name; must be unique per run |
+| `setup-go` | `true` | Install Go to build CRA; set `false` if the job already has Go 1.24+ |
+| `args` | | Extra `analyze` flags, split on whitespace |
+
+**Outputs:** `exit-code`, `issues`, `errors`, `warnings`, `report-file`, `sarif-file`. A later step can read them as `steps.<id>.outputs.<name>`, or read the JSON report, for example to give an AI reviewer CRA's findings.
+
+Notes:
+- A shallow `actions/checkout` is enough. The action fetches the history `--branch` needs.
+- CRA is built from the action's source, so the first run downloads Go modules. `actions/setup-go` caches them for later runs.
+- Only circular dependencies have `error` severity, and dependency analysis is skipped in diff mode unless `with-deps: 'true'`. Use `fail-on: warning` to block on the per-file checks.
+- The action installs the Go version CRA's `go.mod` asks for, and coverage analysis of a Go project runs with it. If your project needs a different Go (1.24 or newer), set it up in an earlier step and pass `setup-go: 'false'`.
+- Pull requests from forks get a read-only token, so the SARIF upload fails there. Set `upload-sarif: 'false'` for those runs and rely on the job summary and report artifact.
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | No issues at or above `--fail-on` (always 0 when `--fail-on` isn't set) |
+| 1 | `--fail-on=warning` and the worst issue found is a warning |
+| 2 | `--fail-on` is set and at least one `error` issue was found |
+| 3 | CRA failed: invalid flags or config, git errors, nothing to analyze, ... |
+
+The report is written before the exit code is decided, so a failing run still produces its full output.
 
 ## Language-Specific Features
 
@@ -477,6 +529,7 @@ code-review-assistant analyze [path] [flags]
 - `--branch` - Analyze only files changed since the merge-base with a branch (e.g. `--branch=main`)
 - `--with-coverage` - Run coverage analysis in diff mode
 - `--with-deps` - Run dependency analysis in diff mode (parses the whole project)
+- `--fail-on` - Exit non-zero when issues at or above this severity are found: none, warning, error (default: none). See [Exit Codes](#exit-codes)
 
 **Analysis Thresholds:**
 - `--large-file-threshold` - Override large file threshold in lines (default: 500)
