@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/daniel-munoz/code-review-assistant/internal/constants"
 	"github.com/spf13/viper"
@@ -22,6 +23,7 @@ import (
 // while maintaining sensible defaults.
 type Config struct {
 	Language   string           `mapstructure:"language"` // Language to analyze: "auto", "go", "python", etc.
+	Preset     string           `mapstructure:"preset"`   // Effective preset label ("" when none), set by LoadConfigWithPreset
 	Analysis   AnalysisConfig   `mapstructure:"analysis"`
 	Output     OutputConfig     `mapstructure:"output"`
 	Storage    StorageConfig    `mapstructure:"storage"`    // Phase 3: Persistent storage
@@ -210,7 +212,34 @@ func Default() *Config {
 //
 // Returns the merged configuration or an error if the config file exists but
 // cannot be read. Missing config files are acceptable and will use defaults.
+//
+// LoadConfig applies only a preset named by "preset:" in the config file or
+// by CRA_PRESET; use LoadConfigWithPreset to pass one explicitly.
 func LoadConfig(configPath string) (*Config, error) {
+	return LoadConfigWithPreset(configPath, "")
+}
+
+// LoadConfigWithPreset loads configuration like LoadConfig and applies a preset.
+//
+// explicitPreset (from --preset), or else the CRA_PRESET environment variable,
+// is an explicit per-run choice and ranks above the config file and env:
+//
+//	defaults < config file < env < preset < CLI flags (applied later via Merge)
+//
+// Without an explicit preset, a "preset:" key in the config file applies, and
+// that file's own keys override it:
+//
+//	defaults < preset < config file < env < CLI flags
+//
+// Either way a preset only sets the keys in PresetAnalysis. Relative preset
+// paths resolve against the config file's directory for "preset:", and against
+// the working directory otherwise.
+func LoadConfigWithPreset(configPath, explicitPreset string) (*Config, error) {
+	explicit := strings.TrimSpace(explicitPreset)
+	if explicit == "" {
+		explicit = strings.TrimSpace(os.Getenv("CRA_PRESET"))
+	}
+
 	v := viper.New()
 
 	// Set defaults
@@ -281,10 +310,36 @@ func LoadConfig(configPath string) (*Config, error) {
 		// Config file not found - use defaults, this is OK
 	}
 
+	// A config-file preset sits just above the defaults
+	var preset *Preset
+	if explicit == "" && v.InConfig("preset") {
+		var err error
+		preset, err = LoadPreset(v.GetString("preset"), filepath.Dir(v.ConfigFileUsed()))
+		if err != nil {
+			return nil, err
+		}
+		preset.SetViperDefaults(v)
+	}
+
 	// Unmarshal into Config struct
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("error parsing config: %w", err)
+	}
+
+	// An explicit preset overrides the config file and env
+	if explicit != "" {
+		var err error
+		preset, err = LoadPreset(explicit, "")
+		if err != nil {
+			return nil, err
+		}
+		preset.ApplyTo(&cfg.Analysis)
+	}
+
+	cfg.Preset = ""
+	if preset != nil {
+		cfg.Preset = preset.Label
 	}
 
 	return &cfg, nil
