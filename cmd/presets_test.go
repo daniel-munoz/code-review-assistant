@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // runPresetCmd runs c's RunE with args and returns what it wrote to stdout.
@@ -78,4 +79,13 @@ func TestShowPreset_Unknown(t *testing.T) {
 func TestShowPreset_RequiresOneArg(t *testing.T) {
 	_, err := runPresetCmd(t, showPresetCmd)
 	require.Error(t, err)
+}
+
+func TestInitTemplate_HasPresetHint(t *testing.T) {
+	assert.Contains(t, defaultConfigYAML, "# preset: standard")
+
+	var parsed map[string]interface{}
+	require.NoError(t, yaml.Unmarshal([]byte(defaultConfigYAML), &parsed))
+	_, active := parsed["preset"]
+	assert.False(t, active, "preset hint must stay commented out")
 }

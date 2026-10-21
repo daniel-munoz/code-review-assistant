@@ -1,5 +1,10 @@
 # Code Review Assistant - Configuration File
 
+# Preset: strict, standard, relaxed, or a path to a preset YAML file.
+# A preset here sets analysis thresholds/detectors; values below override it.
+# A --preset flag or CRA_PRESET env var overrides this file instead.
+# preset: standard
+
 # Language selection (auto, go, python, javascript, kotlin)
 language: auto
 

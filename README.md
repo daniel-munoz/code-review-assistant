@@ -90,6 +90,7 @@ Modular detector system identifies common code smells:
 ### Flexible Configuration
 
 - YAML configuration file support
+- Built-in presets (`strict`, `standard`, `relaxed`) and custom preset files
 - Environment variable overrides (CRA_ prefix)
 - CLI flag overrides
 - Exclude patterns with glob support
@@ -342,6 +343,9 @@ Default exclude patterns:
 Create a `config.yaml` file in your project root or `~/.cra/config.yaml` for global settings:
 
 ```yaml
+# Optional preset: strict, standard, relaxed, or a path (see Presets below)
+# preset: standard
+
 # Language selection (auto, go, python, javascript, kotlin)
 language: "auto"
 
@@ -395,6 +399,57 @@ comparison:
   stable_threshold: 5.0          # % change for "stable" (default: 5.0)
 ```
 
+## Presets
+
+A preset is a named set of analysis thresholds and detector switches, so a CI job or a new project can pick a known rule set without a config file:
+
+```bash
+code-review-assistant analyze . --preset=strict
+code-review-assistant analyze . --preset=strict --branch=origin/main --format sarif -o cra.sarif
+```
+
+| Setting | relaxed | standard | strict |
+|---|---|---|---|
+| `large_file_threshold` | 1000 | 500 | 300 |
+| `long_function_threshold` | 100 | 50 | 30 |
+| `complexity_threshold` | 20 | 10 | 7 |
+| `min_comment_ratio` | 0.05 | 0.15 | 0.20 |
+| `max_parameters` | 7 | 5 | 4 |
+| `max_nesting_depth` | 6 | 4 | 3 |
+| `max_return_statements` | 5 | 3 | 3 |
+| `min_coverage_threshold` | 30 | 50 | 80 |
+| `max_imports` | 15 | 10 | 7 |
+| `max_external_dependencies` | 15 | 10 | 7 |
+| `detect_magic_numbers` | false | true | true |
+| `detect_duplicate_errors` | false | true | true |
+| `detect_non_null_assertions` | true | true | true |
+| `detect_run_blocking` | true | true | true |
+| `detect_circular_deps` | true | true | true |
+
+`standard` is the same as the built-in defaults. A preset sets only these keys: it never changes whether coverage runs, exclude patterns, workers, output, storage or comparison settings.
+
+**Choosing a preset.** Pass `--preset=<name>`, set `CRA_PRESET=<name>`, or put `preset: <name>` in a config file. Names are case-insensitive. Unknown names fail before analysis starts.
+
+**Precedence.** Where the preset comes from decides how it ranks (lowest to highest):
+
+| Preset from | Order |
+|---|---|
+| `--preset` or `CRA_PRESET` | defaults → config file → env → **preset** → CLI flags |
+| `preset:` in a config file | defaults → **preset** → that file's own keys → env → CLI flags |
+
+So `--preset=strict` is never cancelled by a `config.yaml` that happens to set thresholds, while a config file can say `preset: strict` and then adjust single values. Individual CLI flags (for example `--complexity-threshold=15`) always win. `--preset` beats `CRA_PRESET`, and either one replaces a config file's `preset:`.
+
+**Custom presets.** Any value containing a `/` or ending in `.yaml`/`.yml` is read as a preset file. Relative paths resolve against the config file's directory for `preset:`, and against the working directory for `--preset`/`CRA_PRESET`. A preset file may contain `name`, `description` and any of the keys above under `analysis:`; omitted keys keep their defaults and any other key is an error.
+
+```bash
+code-review-assistant list-presets                         # names and descriptions
+code-review-assistant show-preset strict > team-preset.yaml  # start from a built-in
+code-review-assistant show-preset ./team-preset.yaml         # validate a custom preset
+code-review-assistant analyze . --preset=./team-preset.yaml
+```
+
+**Reports and history.** The active preset is shown in console, markdown and HTML reports, recorded as `result.preset` in JSON and as `runs[0].properties.preset` in SARIF, and saved with stored reports. When `--compare` compares two runs made with different presets, CRA prints a warning, since the deltas then include rule changes.
+
 ## CLI Reference
 
 ### analyze
@@ -408,6 +463,9 @@ code-review-assistant analyze [path] [flags]
 
 **Language Flags:**
 - `--language, -l` - Language to analyze: auto, go, python, javascript, kotlin (default: auto)
+
+**Preset Flag:**
+- `--preset` - Analysis preset: strict, standard, relaxed, or a path to a preset YAML file (see [Presets](#presets))
 
 **General Flags:**
 - `--config, -c` - Path to config file (default: ./config.yaml or ~/.cra/config.yaml)
@@ -433,6 +491,22 @@ code-review-assistant analyze [path] [flags]
 - `--compare` - Compare with previous report from storage
 - `--storage-backend` - Storage backend: file or sqlite (default: file)
 - `--storage-path` - Custom storage path (default: ~/.cra)
+
+### list-presets
+
+List the built-in presets with their descriptions.
+
+```bash
+code-review-assistant list-presets
+```
+
+### show-preset
+
+Print a preset's YAML: the embedded file for a built-in, or a custom preset file after validating it.
+
+```bash
+code-review-assistant show-preset <name|path>
+```
 
 ## Example Output
 

@@ -85,6 +85,11 @@ const defaultConfigYAML = `# Code Review Assistant Configuration
 # This file configures the behavior of code-review-assistant.
 # All settings shown are the defaults - uncomment and modify as needed.
 
+# Preset: strict, standard, relaxed, or a path to a preset YAML file.
+# A preset here sets analysis thresholds/detectors; values below override it.
+# A --preset flag or CRA_PRESET env var overrides this file instead.
+# preset: standard
+
 # Language to analyze
 # Options: auto, go, python, javascript, kotlin
 # "auto" will detect the language from project files (go.mod, package.json, etc.)
