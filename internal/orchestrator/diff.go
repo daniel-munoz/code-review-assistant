@@ -34,9 +34,7 @@ func (o *Orchestrator) runDiff(targetPath string) error {
 
 	if len(candidates) == 0 {
 		o.status.Clear()
-		empty := emptyResult(targetPath, scope)
-		empty.Preset = o.config.Preset
-		return o.reporter.Report(empty, nil)
+		return o.reporter.Report(o.emptyResult(targetPath, scope), nil)
 	}
 
 	o.status.Update(fmt.Sprintf("[PARSE] Parsing %d changed %s files...", len(candidates), o.lang.DisplayName()))
@@ -50,7 +48,7 @@ func (o *Orchestrator) runDiff(targetPath string) error {
 
 	if len(changed) == 0 {
 		o.status.Clear()
-		return o.reporter.Report(emptyResult(targetPath, scope), nil)
+		return o.reporter.Report(o.emptyResult(targetPath, scope), nil)
 	}
 
 	result, err := o.analyzer.Analyze(targetPath, changed)
@@ -122,13 +120,14 @@ func (o *Orchestrator) warnPartiallyStaged(files []string) {
 }
 
 // emptyResult is the report for a diff run with nothing to analyze.
-func emptyResult(targetPath string, scope *analyzer.Scope) *analyzer.AnalysisResult {
+func (o *Orchestrator) emptyResult(targetPath string, scope *analyzer.Scope) *analyzer.AnalysisResult {
 	return &analyzer.AnalysisResult{
 		ProjectPath: targetPath,
 		Metrics:     &analyzer.AggregateMetrics{LargestFiles: []*analyzer.FileSize{}},
 		Files:       []*analyzer.FileAnalysis{},
 		Issues:      []*analyzer.Issue{},
 		Scope:       scope,
+		Preset:      o.config.Preset,
 	}
 }
 

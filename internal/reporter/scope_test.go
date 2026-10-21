@@ -26,7 +26,7 @@ func TestFormatScope(t *testing.T) {
 		formatScope(&analyzer.Scope{Mode: "branch", Ref: "main", Base: sha, Files: []string{"a.go", "b.go"}}))
 }
 
-// emptyDiffResult mirrors orchestrator.emptyResult: what an empty diff run reports.
+// emptyDiffResult mirrors Orchestrator.emptyResult: what an empty diff run reports.
 func emptyDiffResult() *analyzer.AnalysisResult {
 	return &analyzer.AnalysisResult{
 		ProjectPath: "/p",

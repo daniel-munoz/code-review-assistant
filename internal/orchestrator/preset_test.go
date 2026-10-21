@@ -100,3 +100,14 @@ func TestRun_WarnsOnPresetMismatch(t *testing.T) {
 		assert.NotContains(t, runStored(t, store, "strict"), "different presets")
 	})
 }
+
+func TestDiffRun_AllChangedFilesFailToParse_SetsPreset(t *testing.T) {
+	dir := newGoRepo(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a", "a.go"), []byte("package a\n\nfunc broken( {\n"), 0o644))
+	gitT(t, dir, "add", "a/a.go")
+
+	run := runDiffJSON(t, dir, config.DiffConfig{Mode: "staged"}, withPreset("strict"))
+
+	assert.Equal(t, 0, run.result.TotalFiles)
+	assert.Equal(t, "strict", run.result.Preset)
+}
